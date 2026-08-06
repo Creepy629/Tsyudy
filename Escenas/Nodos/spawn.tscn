@@ -1,0 +1,12 @@
+[gd_scene load_steps=2 format=3 uid="uid://c6msg2eevkemt"]
+
+[ext_resource type="Script" uid="uid://bom0qany5j14k" path="res://Código/spawn.gd" id="1_3a72r"]
+
+[node name="Spawn" type="Node3D"]
+script = ExtResource("1_3a72r")
+
+[node name="spawnTimer" type="Timer" parent="."]
+wait_time = 5.0
+autostart = true
+
+[connection signal="timeout" from="spawnTimer" to="." method="_on_spawn_timer_timeout"]

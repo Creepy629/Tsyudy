@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3 uid="uid://dswitrkus4jae"]
+
+[ext_resource type="Texture2D" uid="uid://dke8g5s2xc7rg" path="res://Texturas/Materiales/Bobble.png" id="1_0tqxf"]
+[ext_resource type="Script" uid="uid://b4le6yl26uybp" path="res://Código/SpriteBobbl.gd" id="2_b375d"]
+
+[node name="DialogBobbl" type="Node3D"]
+
+[node name="Sprite3D" type="Sprite3D" parent="."]
+transform = Transform3D(3.5, 0, 0, 0, 3.5, 0, 0, 0, 3.5, 0, 0, 0)
+billboard = 2
+texture_filter = 0
+texture = ExtResource("1_0tqxf")
+hframes = 16
+vframes = 3
+script = ExtResource("2_b375d")
