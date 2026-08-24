@@ -27,3 +27,4 @@ Los controles del sistema se pueden remapear desde el menu principal. La pantall
 1. Clona o descarga el repositorio.
 2. Abre el proyecto en **Godot 4.6+** (Net / Mono o estándar).
 3. El programa inicia por default en menu.tscn
+4. Exporta el proyecto con tus preferencias (Windows por default).
