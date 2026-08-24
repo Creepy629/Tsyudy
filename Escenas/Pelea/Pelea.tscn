@@ -1,0 +1,166 @@
+[gd_scene format=3 uid="uid://cmitwifkygn1p"]
+
+[ext_resource type="Script" uid="uid://ckx8hnk3ya2u4" path="res://Código/Pelea/PlayerInput.gd" id="1_a202f"]
+[ext_resource type="Script" uid="uid://e8y376s7j7mh" path="res://Código/Pelea/ArenaCamera.gd" id="1_arena"]
+[ext_resource type="Script" uid="uid://d174rk8wmpck7" path="res://Código/Pelea/FightPlane.gd" id="1_fightplane"]
+[ext_resource type="Script" uid="uid://db34q0wn40plo" path="res://Código/Pelea/Hitbox.gd" id="1_hitbox"]
+[ext_resource type="Script" uid="uid://cx1i4s0y1fwym" path="res://Código/Pelea/Hurtbox.gd" id="1_hurtbox"]
+[ext_resource type="Script" uid="uid://jptsjjlpcbeg" path="res://Código/Pelea/FighterBody.gd" id="1_noarx"]
+[ext_resource type="Script" uid="uid://b26gmtfj0eta" path="res://Código/Pelea/BattleUI.gd" id="1_ui"]
+[ext_resource type="Texture2D" uid="uid://c2m2k15gldoa5" path="res://Texturas/Pelea/CalleHDRI.jpg" id="2_hdri"]
+[ext_resource type="Texture2D" uid="uid://c07q635eb4t22" path="res://Texturas/Pelea/suelo.jpg" id="3_suelo"]
+[ext_resource type="Script" uid="uid://b5dau06ljv3y2" path="res://Código/Pelea/SpriteAnimator.gd" id="7_jsk3o"]
+[ext_resource type="Script" uid="uid://bu3wnn13oo8xp" path="res://Código/Pelea/MatchManager.gd" id="11_tereu"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_suelo"]
+albedo_texture = ExtResource("3_suelo")
+uv1_scale = Vector3(40, 40, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_suelo"]
+material = SubResource("StandardMaterial3D_suelo")
+size = Vector2(1000, 1000)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_wc5p8"]
+size = Vector3(1, 2, 0.25)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hurtbox"]
+size = Vector3(0.5, 1.5, 0.5)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_hitbox"]
+size = Vector3(0.5, 0.5, 0.5)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_jsk3o"]
+size = Vector3(1, 2, 0.25)
+
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_calle"]
+panorama = ExtResource("2_hdri")
+
+[sub_resource type="Sky" id="Sky_4xowi"]
+sky_material = SubResource("PanoramaSkyMaterial_calle")
+
+[sub_resource type="Environment" id="Environment_a202f"]
+background_mode = 2
+sky = SubResource("Sky_4xowi")
+ambient_light_source = 2
+ambient_light_color = Color(0.6, 0.6, 0.6, 1)
+ambient_light_energy = 0.7
+tonemap_mode = 2
+glow_enabled = true
+
+[node name="Node3D" type="Node3D" unique_id=1350905932]
+
+[node name="BattleUI" type="CanvasLayer" parent="." unique_id=1724610393]
+script = ExtResource("1_ui")
+player1 = NodePath("../Player1")
+player2 = NodePath("../AI")
+
+[node name="FightPlane" type="Node3D" parent="." unique_id=900314803]
+script = ExtResource("1_fightplane")
+
+[node name="CSGBox3D" type="CSGBox3D" parent="." unique_id=1700591983]
+transform = Transform3D(500, 0, 0, 0, 1, 0, 0, 0, 500, 0, -0.05, 0)
+use_collision = true
+size = Vector3(1, 0.1, 1)
+
+[node name="SueloVisual" type="MeshInstance3D" parent="." unique_id=1234567890]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.002, 0)
+mesh = SubResource("PlaneMesh_suelo")
+
+[node name="Player1" type="CharacterBody3D" parent="." unique_id=1112280955]
+transform = Transform3D(0.325, 0, 0, 0, 0.325, 0, 0, 0, 0.325, -1.6, 0.42, 0)
+script = ExtResource("1_noarx")
+player_input_path = NodePath("PlayerInput")
+rival_path = NodePath("../AI")
+fight_plane_path = NodePath("../FightPlane")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player1" unique_id=319393469]
+shape = SubResource("BoxShape3D_wc5p8")
+
+[node name="MeshInstance3D_nose" type="MeshInstance3D" parent="Player1/CollisionShape3D" unique_id=592222976]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.358, -0.506)
+
+[node name="PlayerInput" type="Node" parent="Player1" unique_id=1147896556]
+script = ExtResource("1_a202f")
+
+[node name="Hurtbox" type="Area3D" parent="Player1" unique_id=572734707]
+script = ExtResource("1_hurtbox")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player1/Hurtbox" unique_id=1007664478]
+shape = SubResource("BoxShape3D_hurtbox")
+
+[node name="Hitbox" type="Area3D" parent="Player1" unique_id=1949332830]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1)
+script = ExtResource("1_hitbox")
+damage = 0
+knockback = 0.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player1/Hitbox" unique_id=1139001889]
+shape = SubResource("BoxShape3D_hitbox")
+
+[node name="Sprite3D" type="Sprite3D" parent="Player1" unique_id=330640151]
+transform = Transform3D(2.075, 0, 0, 0, 2.075, 0, 0, 0, 2.075, 0, 0, 0)
+script = ExtResource("7_jsk3o")
+
+[node name="AI" type="CharacterBody3D" parent="." unique_id=1450431592]
+transform = Transform3D(0.325, 0, 0, 0, 0.325, 0, 0, 0, 0.325, 1.6, 0.42, 0)
+script = ExtResource("1_noarx")
+rival_path = NodePath("../Player1")
+fight_plane_path = NodePath("../FightPlane")
+is_ai = true
+fighter_slot = 2
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="AI" unique_id=942236028]
+shape = SubResource("BoxShape3D_jsk3o")
+
+[node name="MeshInstance3D_nose" type="MeshInstance3D" parent="AI/CollisionShape3D" unique_id=2051554819]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.358, -0.506)
+
+[node name="Hurtbox" type="Area3D" parent="AI" unique_id=1609025281]
+script = ExtResource("1_hurtbox")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="AI/Hurtbox" unique_id=1840812899]
+shape = SubResource("BoxShape3D_hurtbox")
+
+[node name="Hitbox" type="Area3D" parent="AI" unique_id=909501306]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1)
+script = ExtResource("1_hitbox")
+damage = 0
+knockback = 0.0
+show_debug_visuals = false
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="AI/Hitbox" unique_id=804497462]
+shape = SubResource("BoxShape3D_hitbox")
+
+[node name="Sprite3D" type="Sprite3D" parent="AI" unique_id=1580594525]
+transform = Transform3D(2.075, 0, 0, 0, 2.075, 0, 0, 0, 2.075, 0, 0, 0)
+script = ExtResource("7_jsk3o")
+
+[node name="ArenaSpringArm" type="SpringArm3D" parent="." unique_id=1835911906]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+script = ExtResource("1_arena")
+player1 = NodePath("../Player1")
+player2 = NodePath("../AI")
+fight_plane_path = NodePath("../FightPlane")
+tilt_degrees = 2.0
+wall_margin = 0.95
+
+[node name="Camera3D" type="Camera3D" parent="ArenaSpringArm" unique_id=741892457]
+current = true
+fov = 50.0
+far = 300.0
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=782962467]
+transform = Transform3D(-0.866025, -0.12941, 0.482963, 0, 0.965926, 0.258819, -0.5, 0.224144, -0.836516, 0, 0, 0)
+light_color = Color(0.972549, 0.7137255, 0, 1)
+light_energy = 1.2
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1812204251]
+environment = SubResource("Environment_a202f")
+
+[node name="MatchManager" type="Node" parent="." unique_id=161309197]
+script = ExtResource("11_tereu")
+player1_path = NodePath("../Player1")
+player2_path = NodePath("../AI")
+rounds_to_win = 3
+return_to_city = true

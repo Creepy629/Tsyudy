@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=3 uid="uid://dswitrkus4jae"]
 
 [ext_resource type="Texture2D" uid="uid://dke8g5s2xc7rg" path="res://Texturas/Materiales/Bobble.png" id="1_0tqxf"]
-[ext_resource type="Script" uid="uid://b4le6yl26uybp" path="res://Código/SpriteBobbl.gd" id="2_b375d"]
+[ext_resource type="Script" uid="uid://b4le6yl26uybp" path="res://Código/Ciudad/SpriteBobbl.gd" id="2_b375d"]
 
 [node name="DialogBobbl" type="Node3D"]
 

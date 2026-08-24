@@ -1,0 +1,50 @@
+A: Idle (1-6)
+B: Caminata (1-8)
+C: Correr (1-6)
+D: Victoria (1-10)
+E: Agachado
+	1: Agachado
+	2-3: Golpe débil
+	4-7: Golpe fuerte (Uppercut)
+	8-10: Patada fuerte
+	11-12: Patada débil
+F: Salto/En el aire en general
+	1-7: Salto
+	8-9: Golpe
+	10-11: Patada débil
+	12-13: Patada Fuerte
+G: Puñetazos en tierra
+	1-7: Puñetazo fuerte
+	8-13: Puñetazo débil
+H: Patadas en tierra
+	1-5: Patada fuerte
+	6-10: Patada débil
+	11-17: Fuerte + Atrás
+I: Escudo general
+	1-2: Parado
+	3-4: Agachado
+J: Daño y recuperación
+	1-2: Parado
+	3-4: Agachado
+	5-8: Cayendo
+	9: En el suelo
+	10-16: Lanzado
+	17-21: Recuperación
+K: Especiales generales
+	1-8: Hacha
+	9-11: Codazo israelí (?)
+	12-21: Patada doble
+	Gancho:
+		22-25: Lanzamiento
+		26-29: Jalando
+	30: Golpe por teletransporte
+L: Mareo (1-7)
+M: Proyectiles
+	1: Gancho lanzado
+	2: Gancho tenso
+N: Carátula
+	1: Cara
+	2: Cuerpo
+O: Partes del cuerpo
+	1: Torso
+	2: Piernas

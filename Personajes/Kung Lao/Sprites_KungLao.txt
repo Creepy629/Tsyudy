@@ -1,0 +1,16 @@
+A: Idle
+B: Caminata
+C: Correr
+D: Victoria
+E: Agachado
+F: Salto/En el aire
+G: Puñetazo fuerte en tierra
+H: Puñetazo débil en tierra
+I: Patadas en tierra
+J: Escudo general
+K: Daño y recuperación
+L: Especiales generales
+M: Mareo
+N: Proyectiles
+O: Carátula
+P: Partes del cuerpo
