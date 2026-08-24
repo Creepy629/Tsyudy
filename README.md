@@ -8,7 +8,7 @@ Hecho con **Godot Engine 4.6**.
 
 ### Sistema de Combate 3D "M.U.K.K.E.N."
 * Sistema de pelea de arquetipo 2.5D, similar a **KOF: Maximum Impact**
-* Frame data directa manejada por personaje, con distintos estados (stagger, hitstun, blockstun, etc.)
+* Frame data directa manejada por personaje, con estados básicos.
 
 ### Prueba de sistema de NPC's
 * Los NPCs se dividen en facciones. Los **TT (Terroristas)** irán directo a plantar la bomba en los sitios A o B, y los **CT (Counter-Terrorists)** correrán para desactivarla.
