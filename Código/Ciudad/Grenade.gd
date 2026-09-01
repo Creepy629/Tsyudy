@@ -66,7 +66,6 @@ func _detonate_he() -> void:
 		if not npc is Node3D: continue
 		var dist := global_position.distance_to((npc as Node3D).global_position)
 		if dist <= explosion_radius:
-			print("💣 Granada 💥 %s" % (npc as Node3D).name)
 			if npc.has_method("receive_shot"):
 				npc.call("receive_shot", self)
 

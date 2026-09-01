@@ -1,27 +1,28 @@
 extends Node3D
 
-@onready var spawnTimer = $spawnTimer
+@onready var spawn_timer: Timer = $spawnTimer
+@export  var npc_scenes:  Array[PackedScene] = []
+@export  var team_group:  String = ""   # "CT" o "TT" — asignar en el Inspector
 
-# ──────────────────────────────────────────────────────────────
-# Escenas NPC disponibles para este spawner.
-# Asigna desde el Inspector las escenas que quieras que aparezcan
-# (p. ej. NPC.tscn, NPC_CT.tscn, NPC_T.tscn…).
-# Si el array está vacío se usa la escena por defecto.
-# ──────────────────────────────────────────────────────────────
-@export var npc_scenes: Array[PackedScene] = []
-
-# Escena de respaldo si npc_scenes queda vacío
 const DEFAULT_NPC_SCENE: String = "res://Escenas/Nodos/NPC.tscn"
 
-var npcs_spawned: int = 0
-const MAX_NPCS: int = 16
+# Lista de NPCs que este spawner ha generado en la ronda actual
+var _spawned_npcs: Array[Node] = []
+
+# ─────────────────────────────────────────────────────────────────────────────
+func _ready() -> void:
+	# El timer original sigue funcionando para spawn periódico tipo CS
+	# (el tiempo de warmup antes de que empiecen a aparecer)
+	# Cuando el timer llega a 0 llama a _on_spawn_timer_timeout.
+	pass
 
 func _on_spawn_timer_timeout() -> void:
-	if npcs_spawned >= MAX_NPCS:
-		spawnTimer.stop()
-		return
+	var count := GameManager.npc_count_per_team
+	for i in count:
+		_spawn_one()
+	spawn_timer.stop()   # todos salen de golpe al inicio de ronda, luego se para
 
-	# Elegir escena: aleatoria del array o la de respaldo
+func _spawn_one() -> Node:
 	var scene: PackedScene
 	if npc_scenes.is_empty():
 		scene = load(DEFAULT_NPC_SCENE)
@@ -29,11 +30,39 @@ func _on_spawn_timer_timeout() -> void:
 		scene = npc_scenes[randi() % npc_scenes.size()]
 
 	if scene == null:
-		push_warning("Spawner %s: escena NPC nula, se omite spawn." % name)
-		return
+		push_warning("Spawner %s: escena NPC nula." % name)
+		return null
 
-	var spawnNPC: Node = scene.instantiate()
-	get_parent().add_child(spawnNPC)
-	spawnNPC.global_position = global_position
+	var npc: Node = scene.instantiate()
 
-	npcs_spawned += 1
+	# Añadir al grupo del equipo si está configurado
+	if team_group != "":
+		npc.add_to_group(team_group)
+
+	# Asignar dispersión aleatoria suave
+	var offset := Vector3(randf_range(-1.2, 1.2), 0.1, randf_range(-1.2, 1.2))
+	var spawn_pos := global_position + offset
+
+	# Añadir al árbol primero para evitar la advertencia "!is_inside_tree()"
+	get_parent().add_child(npc)
+
+	if npc is Node3D:
+		npc.global_position = spawn_pos
+		if "spawn_point" in npc:
+			npc.set("spawn_point", spawn_pos)
+
+	_spawned_npcs.append(npc)
+	return npc
+
+# ── Respawn al inicio de cada nueva ronda (llamado por BombSite) ──────────
+func respawn_all() -> void:
+	# Limpiar instancias previas muertas
+	for npc in _spawned_npcs:
+		if is_instance_valid(npc):
+			npc.queue_free()
+	_spawned_npcs.clear()
+
+	# Generar cantidad actualizada (puede haber cambiado desde el celular)
+	var count := GameManager.npc_count_per_team
+	for i in count:
+		_spawn_one()

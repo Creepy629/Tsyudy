@@ -6,8 +6,17 @@ var _overrides: Dictionary = {}
 var _waiting_index: int = -1
 var _container: VBoxContainer = null
 
+var _on_back_callback: Callable = Callable()
+var _is_embedded: bool = false
+
+# Debe llamarse ANTES de add_child para que _ready() vea _is_embedded=true
+func set_embedded_mode(callback: Callable) -> void:
+	_is_embedded = true
+	_on_back_callback = callback
+
 func _ready() -> void:
-	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	if not _is_embedded:
+		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_load_cfg()
 	_build_ui()
 
@@ -23,34 +32,38 @@ func _load_cfg() -> void:
 		line = f.get_line()
 
 # ── Construcción de config. ───────────────────────────────────────────────
-# Me da cosa que no lo pueda centrar a mano ni poner la barra esta pa bajar.
 func _build_ui() -> void:
-	var bg := ColorRect.new()
-	bg.color = Color(0.03, 0.02, 0.05)
-	bg.set_anchors_preset(PRESET_FULL_RECT)
-	add_child(bg)
+	if not _is_embedded:
+		var bg := ColorRect.new()
+		bg.color = Color(0.03, 0.02, 0.05)
+		bg.set_anchors_preset(PRESET_FULL_RECT)
+		add_child(bg)
+	
 	var title := Label.new()
 	title.text = "CONTROLES"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.anchor_right = 1.0
-	title.offset_top = 10
-	title.offset_bottom = 40
-	title.add_theme_font_size_override("font_size", 24)
+	title.offset_top = 5
+	title.offset_bottom = 30
+	title.add_theme_font_size_override("font_size", 14 if _is_embedded else 24)
 	add_child(title)
+	
 	var scroll := ScrollContainer.new()
-	scroll.offset_left = 80
-	scroll.offset_right = -80
-	scroll.offset_top = 50
-	scroll.offset_bottom = -50
+	scroll.offset_left = 5 if _is_embedded else 80
+	scroll.offset_right = -5 if _is_embedded else -80
+	scroll.offset_top = 30 if _is_embedded else 50
+	scroll.offset_bottom = -45 if _is_embedded else -50
 	scroll.anchor_right = 1.0
 	scroll.anchor_bottom = 1.0
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	add_child(scroll)
+	
 	_container = VBoxContainer.new()
 	_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_container)
+	
 	_add_section("PELEA")
 	_add_row("Izquierda", "fight", "left")
 	_add_row("Derecha", "fight", "right")
@@ -69,13 +82,21 @@ func _build_ui() -> void:
 	_add_row("Izquierda", "city", "Izquierda")
 	_add_row("Salto", "city", "Salto")
 	_add_row("Correr", "city", "Correr")
+	
 	var back := Button.new()
 	back.text = "VOLVER"
 	back.anchor_left = 0.5; back.anchor_right = 0.5
 	back.anchor_top = 1.0; back.anchor_bottom = 1.0
-	back.offset_left = -60; back.offset_right = 60
-	back.offset_top = -40; back.offset_bottom = -10
-	back.pressed.connect(func() -> void: get_tree().change_scene_to_file("res://Escenas/Pantallas/menu.tscn"))
+	back.offset_left = -50 if _is_embedded else -60
+	back.offset_right = 50 if _is_embedded else 60
+	back.offset_top = -38 if _is_embedded else -40
+	back.offset_bottom = -8 if _is_embedded else -10
+	back.pressed.connect(func() -> void:
+		if _on_back_callback.is_valid():
+			_on_back_callback.call()
+		else:
+			get_tree().change_scene_to_file("res://Escenas/Pantallas/menu.tscn")
+	)
 	add_child(back)
 
 func _add_section(text: String) -> void:
@@ -88,10 +109,14 @@ func _add_row(display: String, scope: String, key: String) -> void:
 	_container.add_child(row)
 	var name_l := Label.new()
 	name_l.text = display
-	name_l.custom_minimum_size = Vector2(220, 0)
+	name_l.custom_minimum_size = Vector2(100 if _is_embedded else 220, 0)
+	if _is_embedded:
+		name_l.add_theme_font_size_override("font_size", 11)
 	row.add_child(name_l)
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(180, 0)
+	btn.custom_minimum_size = Vector2(90 if _is_embedded else 180, 0)
+	if _is_embedded:
+		btn.add_theme_font_size_override("font_size", 11)
 	row.add_child(btn)
 	var idx := _entries.size()
 	_entries.append({"display": display, "scope": scope, "key": key, "btn": btn})

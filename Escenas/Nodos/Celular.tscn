@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://c3lu14r_p4us4_001"]
+
+[ext_resource type="Script" path="res://Código/Ciudad/Celular.gd" id="1_celular"]
+
+[node name="Celular" type="CanvasLayer"]
+process_mode = 3
+layer = 128
+script = ExtResource("1_celular")

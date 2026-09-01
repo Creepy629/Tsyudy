@@ -238,21 +238,22 @@ func receive_shot(shooter: Node3D) -> void:
 		
 	current_state = State.DEAD_FROZEN
 	death_timer = 0.0
-	velocity = Vector3.ZERO
 	
 	BombSite.log_kill(shooter, self, "🔫")
 	
-	if collision_node != null:
-		collision_node.set_deferred("disabled", true)
+	# Hacer el cadáver intangible para personajes vivos (layer 0) pero permitiendo caer a la tierra (mask 1)
+	collision_layer = 0
+	collision_mask = 1
+
 	if gametag_label != null:
 		gametag_label.visible = false
-	
 	if audio.playing:
 		audio.stop()
 		
 	if sprite_3d != null:
-		sprite_3d.modulate = Color(0.4, 0.4, 1.0, 0.7)
+		sprite_3d.modulate = Color(1.0, 1.0, 1.0, 1.0) # 100% opacidad, textura original
 		sprite_3d.rotation_degrees.z = 90.0
+		sprite_3d.position.y = -0.7
 
 func apply_flashbang(duration: float = 5.0) -> void:
 	if current_state == State.DEAD_FROZEN: return
@@ -262,6 +263,8 @@ func apply_flashbang(duration: float = 5.0) -> void:
 		sprite_3d.modulate = Color(2.5, 2.5, 2.5, 1.0)
 
 func respawn_to_base() -> void:
+	collision_layer = 1
+	collision_mask = 1
 	if collision_node != null:
 		collision_node.set_deferred("disabled", false)
 	if gametag_label != null:
@@ -276,6 +279,7 @@ func respawn_to_base() -> void:
 	if sprite_3d != null:
 		sprite_3d.modulate = Color(1, 1, 1, 1)
 		sprite_3d.rotation_degrees.z = 0.0
+		sprite_3d.position.y = SKIN_POS_Y
 	global_position = spawn_point
 	last_position = spawn_point
 	_stuck_jumps = 0
@@ -336,11 +340,14 @@ func _physics_process(delta: float) -> void:
 	_update_audio()
 	move_and_slide()
 
+# Caída física corta al morir; una vez en el suelo, se detiene move_and_slide para 0 consumo de CPU
 func _process_dead(delta: float) -> void:
 	death_timer += delta
-	velocity = Vector3.ZERO
-	if not BombSite.round_ended and death_timer >= death_freeze_time:
-		_respawn()
+	if death_timer < 0.4 and not is_on_floor():
+		velocity += get_gravity() * delta
+		move_and_slide()
+	else:
+		velocity = Vector3.ZERO
 
 func _process_waiting(delta: float) -> void:
 	wait_timer += delta
@@ -385,13 +392,14 @@ func _process_combat(delta: float) -> void:
 		choose_next_objective()
 		return
 		
-	# Verificar si perdimos línea de visión física (obstáculos/paredes)
+	# Verificar si perdimos línea de visión física (paredes/obstáculos estáticos)
 	if ray != null:
 		ray.target_position = to_local(_target_enemy.global_position + Vector3(0, 1.0, 0))
 		ray.force_raycast_update()
-		if ray.is_colliding() and ray.get_collider() != _target_enemy:
+		var col = ray.get_collider()
+		if ray.is_colliding() and col != _target_enemy and (col is StaticBody3D or col is CSGShape3D or col is GridMap):
 			los_lost_timer += delta
-			if los_lost_timer >= 2.0: # 2 segundos sin verlo = abortar e ir a buscarlo/patrullar
+			if los_lost_timer >= 2.0: # 2 segundos tras pared = abortar combate
 				_target_enemy = null
 				combat_timer = 0.0
 				los_lost_timer = 0.0
@@ -505,26 +513,41 @@ func _process_walking(delta: float) -> void:
 
 # ── Escaneo de enemigos con RayCast ────────────────────────────────────────
 func _scan_for_enemies() -> bool:
-	if ray == null or is_blinded: return false
+	if is_blinded: return false
 	var enemies: Array = get_tree().get_nodes_in_group(ENEMY_TEAM)
+	var closest_enemy: Node3D = null
+	var closest_dist: float = 9999.0
+
 	for enemy in enemies:
 		if not enemy is Node3D: continue
 		if "current_state" in enemy and enemy.current_state == State.DEAD_FROZEN:
 			continue
-			
-		var to_enemy: Vector3 = (enemy as Node3D).global_position - global_position
-		if to_enemy.length() > detection_radius:
+
+		var dist: float = global_position.distance_to((enemy as Node3D).global_position)
+		if dist > detection_radius:
 			continue
-			
-		ray.target_position = to_local((enemy as Node3D).global_position + Vector3(0, 1.0, 0))
-		ray.force_raycast_update()
-		
-		if not ray.is_colliding() or ray.get_collider() == enemy:
-			_target_enemy = enemy as Node3D
-			current_state = State.COMBAT
-			combat_timer = 0.0
-			shoot_timer = 0.2
-			return true
+
+		var is_blocked: bool = false
+		if ray != null:
+			ray.target_position = to_local((enemy as Node3D).global_position + Vector3(0, 1.0, 0))
+			ray.force_raycast_update()
+			if ray.is_colliding():
+				var col = ray.get_collider()
+				if col != enemy and (col is StaticBody3D or col is CSGShape3D or col is GridMap):
+					is_blocked = true
+
+		if not is_blocked:
+			if dist < closest_dist:
+				closest_dist = dist
+				closest_enemy = enemy as Node3D
+
+	if closest_enemy != null:
+		_target_enemy = closest_enemy
+		current_state = State.COMBAT
+		combat_timer = 0.0
+		shoot_timer = 0.05 # Disparo inmediato al detectar
+		return true
+
 	return false
 
 func _shoot_at_enemy(enemy: Node3D) -> void:

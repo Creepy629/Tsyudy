@@ -5,8 +5,8 @@ enum BombState {UNPLANTED, PLANTING, PLANTED, DEFUSING, EXPLODED, DEFUSED, TIMEO
 
 @export var site_name: String = "Site A"
 @export var plant_time: float = 5.0
-@export var defuse_time: float = 5.0
-@export var explode_time: float = 30.0
+@export var defuse_time: float = 8.0
+@export var explode_time: float = 15.0
 @export var round_duration: float = 120.0 # 2 minutos de gritos.
 @export var site_radius: float = 4.0
 @export var transparent_color: Color = Color(1.0, 0.8, 0.1, 0.3)
@@ -113,7 +113,14 @@ func _physics_process(delta: float) -> void:
 			if round_time_remaining <= 0.0:
 				current_state = BombState.TIMEOUT
 				CSHUD.play_bomb_cue("ctwin")
-				start_round_end("GANAN LOS ANTI-TERRORISTAS")
+				start_round_end("GANAN LOS ANTI-TERRORISTAS (TIEMPO AGOTADO)")
+
+	# Chequeo de victoria por eliminación de bando contrario (optimizado a 4 veces por segundo)
+	if not round_ended:
+		if self == get_tree().get_first_node_in_group("BombSite"):
+			state_timer += delta
+			if state_timer >= 0.25:
+				_check_team_elimination_win()
 
 	# Si la ronda terminó, manejar el conteo de 10s para reiniciar
 	if round_ended:
@@ -145,7 +152,6 @@ func _physics_process(delta: float) -> void:
 				bomb_timer = explode_time
 				state_timer = 0.0
 				bomb_mesh.visible = true
-				print("¡LA BOMBA HA SIDO PLANTADA EN %s! (30s para detonar)" % site_name)
 				
 		BombState.PLANTED:
 			bomb_timer -= delta
@@ -263,13 +269,10 @@ func is_planted() -> bool:
 	return current_state == BombState.PLANTED or current_state == BombState.DEFUSING
 
 # ── Fin de ronda ────────────────────────────────────────────────────────────────
-func start_round_end(msg: String = "") -> void:
+func start_round_end(_msg: String = "") -> void:
 	if not round_ended:
 		round_ended = true
 		round_reset_timer = ROUND_RESET_DELAY
-		if msg != "":
-			print(msg)
-		print("⏱️ Reiniciando ronda en %.0f segundos..." % ROUND_RESET_DELAY)
 
 # ── Killfeed y Chat CS ─────────────────────────────────────────────────────
 static func log_kill(killer: Node3D, victim: Node3D, weapon_emoji: String = "🔫") -> void:
@@ -285,11 +288,34 @@ static func log_kill(killer: Node3D, victim: Node3D, weapon_emoji: String = "�
 	if randf() < 0.65:
 		var quote_k: String = KILL_QUOTES[randi() % KILL_QUOTES.size()]
 		CSHUD.post_chat(killer_name, quote_k, killer_is_ct)
-		print("%s: %s" % [killer_name, quote_k])
 	if randf() < 0.45:
 		var quote_v: String = DEATH_QUOTES[randi() % DEATH_QUOTES.size()]
 		CSHUD.post_chat(victim_name, quote_v, victim_is_ct)
-		print("%s: %s" % [victim_name, quote_v])
+
+	var first_site = killer.get_tree().get_first_node_in_group("BombSite")
+	if first_site and first_site.has_method("_check_team_elimination_win"):
+		first_site._check_team_elimination_win()
+
+func _check_team_elimination_win() -> void:
+	var cts: Array = get_tree().get_nodes_in_group("CT")
+	var tts: Array = get_tree().get_nodes_in_group("TT")
+	
+	var alive_cts := 0
+	for ct in cts:
+		if not _is_npc_dead(ct):
+			alive_cts += 1
+			
+	var alive_tts := 0
+	for tt in tts:
+		if not _is_npc_dead(tt):
+			alive_tts += 1
+
+	if cts.size() > 0 and alive_cts == 0:
+		CSHUD.play_bomb_cue("terwin")
+		start_round_end("GANAN LOS TERRORISTAS (TODOS LOS CT FUERON ELIMINADOS)")
+	elif tts.size() > 0 and alive_tts == 0 and active_planted_site == null:
+		CSHUD.play_bomb_cue("ctwin")
+		start_round_end("GANAN LOS ANTI-TERRORISTAS (TODOS LOS TT FUERON ELIMINADOS)")
 
 # ── Reseteo de Ronda ───────────────────────────────────────────────────────
 func reset_site() -> void:
@@ -312,26 +338,30 @@ func trigger_round_reset() -> void:
 	for s in sites:
 		if s is BombSite:
 			(s as BombSite).reset_site()
+
+	# Llamar a respawn_all en todos los spawners si existen
+	var map_node := get_tree().current_scene.find_child("Mapa", true, false)
+	if map_node:
+		var ct_spawner = map_node.find_child("CT", true, false)
+		if ct_spawner and ct_spawner.has_method("respawn_all"):
+			ct_spawner.call("respawn_all")
+		var tt_spawner = map_node.find_child("TT", true, false)
+		if tt_spawner and tt_spawner.has_method("respawn_all"):
+			tt_spawner.call("respawn_all")
 			
-	# Resetear todos los CTs
+	# Resetear o reposicionar CTs existentes si no usan spawner dinámico
 	var cts: Array = get_tree().get_nodes_in_group("CT")
 	for ct in cts:
 		if ct.has_method("respawn_to_base"):
 			ct.call("respawn_to_base")
 			
-	# Resetear todos los TTs y asignar 1 C4
+	# Resetear o reposicionar TTs existentes y asignar C4 a cada uno
 	var tts: Array = get_tree().get_nodes_in_group("TT")
 	for tt in tts:
 		if tt.has_method("respawn_to_base"):
 			tt.call("respawn_to_base")
-			
-	if not tts.is_empty():
-		var chosen_idx: int = randi() % tts.size()
-		for i in range(tts.size()):
-			if tts[i].has_method("set_c4_carrier"):
-				tts[i].call("set_c4_carrier", i == chosen_idx)
-				
-	print("🔄 --- NUEVA RONDA INICIADA (2:00) ---")
+		if "has_c4" in tt:
+			tt.has_c4 = true
 
 # ── C4 Caído ──────────────────────────────────────────────────────────────
 static func drop_c4(pos: Vector3, tree: SceneTree) -> void:
