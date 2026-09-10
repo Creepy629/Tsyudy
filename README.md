@@ -2,7 +2,7 @@
   <img src="Texturas/Branding/logoMain.png" alt="Tsyudy Logo" width="400"/>
 </p>
 
-Hecho con **Godot Engine 4.6**.
+Hecho con **Godot Engine 4.7**.
 
 ---
 
@@ -12,7 +12,7 @@ Hecho con **Godot Engine 4.6**.
 
 ### Prueba de sistema de NPC's
 * Los NPCs se dividen en facciones. Los **TT (Terroristas)** irán directo a plantar la bomba en los sitios A o B, y los **CT (Counter-Terrorists)** correrán para desactivarla.
-* NPCs que caminan, corren, hacen bhop si van con prisa, y escriben y hablan en chat con nombres propios.
+* NPCs que caminan, corren, hacen bhop si van con prisa, y escriben y hablan en chat con nombres propios. Incluye NPC's que pueden mantenerse quietos para ofrecer conversación.
 
 ---
 
@@ -25,6 +25,6 @@ Los controles del sistema se pueden remapear desde el menu principal. La pantall
 ## Compilación
 
 1. Clona o descarga el repositorio.
-2. Abre el proyecto en **Godot 4.6+** (Net / Mono o estándar).
+2. Abre el proyecto en **Godot 4.7+** (Net / Mono o estándar).
 3. El programa inicia por default en menu.tscn
 4. Exporta el proyecto con tus preferencias (Windows por default).
