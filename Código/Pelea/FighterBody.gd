@@ -2,6 +2,9 @@ extends CharacterBody3D
 class_name FighterBody
 
 const GRAVITY := -15.0
+const HIT_FLARE_SHADER: Shader = preload("res://Shaders/hit_flash.gdshader")
+const HIT_SPHERE_SHADER: Shader = preload("res://Shaders/hit_sphere.gdshader")
+const HIT_SPARK_TRAIL_SHADER: Shader = preload("res://Shaders/hit_spark_trail.gdshader")
 @export var sidestep_angular_speed: float = 3.5 # rad/s
 @export var sidestep_translate_speed: float = 3.0 # m/s
 @export var pushbox_correction_speed: float = 6.0
@@ -35,13 +38,15 @@ var _pending_plane_reattach: bool = false
 var last_input_state: Dictionary = {}
 var match_frozen := false
 var input_state: Dictionary
-var _crouched := false
 var _hurtbox_base_size := Vector3.ZERO
 var _hurtbox_base_offset := Vector3.ZERO
 var is_crouching := false
+var hurtbox_scale: Vector3 = Vector3.ONE # perfil por personaje (lo setea SpecialMoves)
+var hurtbox_offset: Vector3 = Vector3.ZERO
 var _hurtbox_col: CollisionShape3D = null
 var is_guarding := false
 var is_crouch_guarding := false
+var _hit_sound_stream: AudioStream = null
 
 func _set_crouched_hurtbox(crouch: bool) -> void:
 	if _hurtbox_col == null or not (_hurtbox_col.shape is BoxShape3D):
@@ -53,12 +58,10 @@ func _set_crouched_hurtbox(crouch: bool) -> void:
 		s.y *= 0.5
 		shape.size = s
 		_hurtbox_col.position = _hurtbox_base_offset + Vector3(0.0, -_hurtbox_base_size.y * 0.25, 0.0)
-		print("[", character_name, "] hurtbox AGACHADO (mitad de altura)")
 	elif not crouch and is_crouching:
 		is_crouching = false
 		shape.size = _hurtbox_base_size
 		_hurtbox_col.position = _hurtbox_base_offset
-		print("[", character_name, "] hurtbox de pie")
 
 func get_fight_axis() -> Vector3:
 	var fight_dir := Vector3.RIGHT
@@ -121,7 +124,7 @@ func _snap_to_fight_plane() -> void:
 		global_position = fight_plane.get_projected_position(global_position)
 
 func _ready() -> void:
-	_resolve_character_name() # ← SIEMPRE primero, antes de cargar nada
+	_resolve_character_name()
 	
 	if not player_input_path.is_empty() and has_node(player_input_path):
 		player_input = get_node(player_input_path) as PlayerInput
@@ -147,15 +150,16 @@ func _ready() -> void:
 	
 	_load_special_moves()
 	
+	if ResourceLoader.exists("res://Audio/Pelea/Punch.mp3"):
+		_hit_sound_stream = ResourceLoader.load("res://Audio/Pelea/Punch.mp3") as AudioStream
+	
 	set_collision_layer_value(1, false)
 	set_collision_layer_value(fighter_physics_layer_bit, true)
 	set_collision_mask_value(1, true)
 	set_collision_mask_value(fighter_physics_layer_bit, false)
 	
-	# Inicializamos la máquina de estados
 	state_machine = FighterStateMachine.new(self)
 	
-	# IA: carga la IA específica del personaje si existe, de lo contrario no hace nada
 	if is_ai:
 		var char_n := character_name.replace(" ", "")
 		var ai_path := "res://Personajes/" + character_name + "/" + char_n + "AI.gd"
@@ -172,8 +176,17 @@ func _ready() -> void:
 		_hurtbox_col = hb.get_node_or_null("CollisionShape3D") as CollisionShape3D
 		if _hurtbox_col and _hurtbox_col.shape is BoxShape3D:
 			_hurtbox_col.shape = (_hurtbox_col.shape as BoxShape3D).duplicate()
-			_hurtbox_base_size = (_hurtbox_col.shape as BoxShape3D).size
+			var s := (_hurtbox_col.shape as BoxShape3D).size
+			s = Vector3(s.x * hurtbox_scale.x, s.y * hurtbox_scale.y, s.z * hurtbox_scale.z)
+			(_hurtbox_col.shape as BoxShape3D).size = s
+			_hurtbox_col.position += hurtbox_offset
+			_hurtbox_base_size = s
 			_hurtbox_base_offset = _hurtbox_col.position
+			# Sincronizar la caché de la Hurtbox, o reset_hurtbox_size() desharía el perfil al instante.
+			var hurtbox_node := hb as Hurtbox
+			if hurtbox_node:
+				hurtbox_node._default_hurtbox_size = s
+				hurtbox_node._default_hurtbox_offset = _hurtbox_col.position
 
 func reset_round() -> void:
 	if state_machine:
@@ -200,11 +213,12 @@ func reset_round() -> void:
 func _resolve_character_name() -> void:
 	if character_name != "":
 		return # La escena fijó nombre a mano: ese manda.
+	var from_gm: String = ""
 	var gm := get_node_or_null("/root/GameManager")
 	if gm != null:
-		character_name = str(gm.p2_character) if fighter_slot == 2 else str(gm.p1_character)
-	else:
-		character_name = "Scorpion" if fighter_slot == 2 else "Kung Lao"
+		from_gm = str(gm.p2_character) if fighter_slot == 2 else str(gm.p1_character)
+	# Si nadie eligió personajes (corrida directa de Pelea.tscn), los defaults por slot salvan el día.
+	character_name = from_gm if from_gm != "" else ("Scorpion" if fighter_slot == 2 else "Kung Lao")
 
 func _load_special_moves() -> void:
 	if character_name == "": return
@@ -231,7 +245,7 @@ func _physics_process(delta: float) -> void:
 			pass
 		
 		elif rival.is_detached_from_plane:
-			# El rival es el pivote, está atacando pues
+			# El rival ataca: él es el pivote, el FightPlane lo sigue a él
 			fight_plane.global_position = Vector3(rival.global_position.x, 0.0, rival.global_position.z)
 		
 		else:
@@ -253,7 +267,6 @@ func _physics_process(delta: float) -> void:
 		if target_pos.distance_to(global_position) > 0.01:
 			look_at(target_pos, Vector3.UP)
 	
-	var input_state: Dictionary
 	if match_frozen:
 		input_state = _neutral_input_state()
 	else:
@@ -267,18 +280,13 @@ func _physics_process(delta: float) -> void:
 	is_guarding = on_ground_idle and bool(input_state.get("guard", false))
 	is_crouch_guarding = is_guarding and bool(input_state.get("crouch", false))
 	
-	# Revisar si hay un ataque especial o normal entrante
 	if special_moves and special_moves.has_method("check_special_moves"):
 		special_moves.check_special_moves(input_state, state_machine)
 	
 	last_input_state = input_state
-
-	# Procesar toda la física, gravedad, movimiento y acciones en la máquina
-	# (el sidestep con Shift+doble-toque también se resuelve adentro, como
-	# un MoveState más, así que ya no lo llamamos aparte acá)
 	state_machine.process_machine(delta, input_state)
 	
-	# Bloqueo suave: Mantiene al personaje cerca del FightPlane sin robar movimiento.
+	# Bloqueo suave: mantiene al personaje cerca del FightPlane sin robar movimiento
 	if fight_plane:
 		if is_detached_from_plane:
 			pass
@@ -291,7 +299,6 @@ func _physics_process(delta: float) -> void:
 				global_position = target
 				_pending_plane_reattach = false
 		else:
-			# Lerp suave en lugar de snap instantáneo
 			var target: Vector3 = fight_plane.get_projected_position(global_position)
 			var weight: float = clampf(plane_reattach_speed * delta, 0.0, 1.0)
 			global_position = global_position.lerp(target, weight)
@@ -327,104 +334,189 @@ func receive_hit(hitbox: Node) -> void:
 	if launch_v >= 7.0 and launch_ang >= 80.0 and rival:
 		uppercut_landed.emit(rival)
 	
-	_spawn_hit_spark(hitbox, guarded)
+	_spawn_hit_flash(hitbox, guarded)
 	_play_hit_sound(guarded)
 
-func _spawn_hit_spark(hitbox: Node, guarded: bool) -> void:
-	var spark_path := "res://Texturas/Pelea/HitSpark.png"
-	if not FileAccess.file_exists(spark_path) and not ResourceLoader.exists(spark_path):
+
+func _spawn_hit_flash(hitbox: Node, guarded: bool) -> void:
+	var parent_scene := get_parent()
+	if parent_scene == null:
 		return
-	var tex = load(spark_path)
-	if tex == null:
-		return
-	
-	var spark := Sprite3D.new()
-	spark.texture = tex
-	spark.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	spark.pixel_size = 1.0 / 170.0
-	
-	var spark_scale := 0.4
+
+	var spark_pos := global_position + Vector3(0.0, 1.0, 0.0)
+	var flare_scale := 0.6
 	if hitbox != null and hitbox is Node3D:
+		spark_pos = (global_position + (hitbox as Node3D).global_position) * 0.5
+		spark_pos.y += 0.2
 		var col := (hitbox as Node3D).get_node_or_null("CollisionShape3D") as CollisionShape3D
 		if col and col.shape is BoxShape3D:
 			var sz: Vector3 = (col.shape as BoxShape3D).size
-			spark_scale = maxf(sz.x, maxf(sz.y, sz.z)) * 0.35
-	spark.scale = Vector3.ONE * clampf(spark_scale, 0.2, 0.5)
-	
-	if guarded:
-		spark.modulate = Color(0.4, 0.8, 1.0, 0.9)
-	else:
-		spark.modulate = Color(1.0, 0.9, 0.4, 1.0)
-	
-	var parent_scene := get_parent()
-	if parent_scene:
-		parent_scene.add_child(spark)
-		var spark_pos := global_position
-		if hitbox != null and hitbox is Node3D:
-			spark_pos = (global_position + (hitbox as Node3D).global_position) * 0.5
-			spark_pos.y += 0.3
-		spark.global_position = spark_pos
-		
-		var timer := get_tree().create_timer(0.12)
-		timer.timeout.connect(spark.queue_free)
+			flare_scale = clampf(maxf(sz.x, maxf(sz.y, sz.z)) * 0.5, 0.4, 0.9)
+
+	var tint: Color = Color(0.2, 0.65, 1.0, 1.0) if guarded else Color(1.0, 0.12, 0.12, 1.0)
+
+	# ── Destello: quad orientado UNA vez hacia la cámara (sin billboard) ──
+	var flare := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(1.0, 1.0)
+	flare.mesh = quad
+	flare.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var mat := ShaderMaterial.new()
+	mat.shader = HIT_FLARE_SHADER
+	mat.set_shader_parameter("tint", tint)
+	mat.set_shader_parameter("seed", randf() * 100.0)
+	flare.material_override = mat
+	parent_scene.add_child(flare)
+	flare.global_position = spark_pos
+	flare.scale = Vector3.ONE * flare_scale
+
+	# Orientación analítica inmediata hacia la cámara activa o eje visual del plano
+	var cam := flare.get_viewport().get_camera_3d()
+	if cam != null and spark_pos.distance_squared_to(cam.global_position) > 0.001:
+		flare.look_at(cam.global_position, Vector3.UP)
+	elif fight_plane != null and fight_plane.cam_dir.length_squared() > 0.001:
+		flare.look_at(spark_pos + fight_plane.cam_dir, Vector3.UP)
+
+	# ── Chispas: esferitas aditivas con estela sólida (sin billboard) ──
+	var parts := GPUParticles3D.new()
+	parts.amount = 7 # Cantidad reducida de chispas (entre 6 y 8)
+	parts.one_shot = true
+	parts.explosiveness = 0.95
+	parts.lifetime = 0.52
+	parts.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	pm.emission_sphere_radius = 0.03
+	pm.direction = Vector3(0.0, 1.0, 0.0) # Cono superior suave
+	pm.spread = 65.0
+	pm.initial_velocity_min = 1.0 # Salen con fuerza ligera
+	pm.initial_velocity_max = 2.3
+	pm.gravity = Vector3(0.0, -10.0, 0.0) # Gravedad para caer visiblemente al suelo
+	pm.damping_min = 0.5
+	pm.damping_max = 1.2
+	parts.process_material = pm
+
+	# Material de la estela: Shader con cabeza blanca incandescente y cola de color saturado
+	var trail_mat := ShaderMaterial.new()
+	trail_mat.shader = HIT_SPARK_TRAIL_SHADER
+	trail_mat.set_shader_parameter("tint", tint)
+	trail_mat.set_shader_parameter("brightness", 4.0)
+
+	# ── Esfera de brillo Shader en el impacto ──
+	var sphere_inst := MeshInstance3D.new()
+	var sphere_mesh := SphereMesh.new()
+	sphere_mesh.radius = 0.16 * flare_scale
+	sphere_mesh.height = 0.32 * flare_scale
+	sphere_mesh.radial_segments = 16
+	sphere_mesh.rings = 8
+	sphere_inst.mesh = sphere_mesh
+	sphere_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var sphere_mat := ShaderMaterial.new()
+	sphere_mat.shader = HIT_SPHERE_SHADER
+	sphere_mat.set_shader_parameter("tint", tint)
+	sphere_mat.set_shader_parameter("fade", 1.0)
+	sphere_inst.material_override = sphere_mat
+	parent_scene.add_child(sphere_inst)
+	sphere_inst.global_position = spark_pos
+
+	# Estela real (RibbonTrailMesh afilada que sigue a cada chispa de forma individual)
+	var ribbon := RibbonTrailMesh.new()
+	ribbon.size = 0.024 # Grosor visible
+	ribbon.sections = 6
+	ribbon.section_length = 0.02
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 0.0)) # Cola (tail) afilada en 0.0
+	curve.add_point(Vector2(1.0, 1.0)) # Cabeza (cabeza de chispa) gruesa en 1.0
+	ribbon.curve = curve
+	ribbon.material = trail_mat
+
+	parts.trail_enabled = true
+	parts.trail_lifetime = 0.14
+	parts.draw_passes = 1
+	parts.draw_pass_1 = ribbon
+
+	parent_scene.add_child(parts)
+	parts.global_position = spark_pos
+	parts.emitting = true
+
+	# ── Pop suave + fade del destello y la esfera de impacto ──
+	var tw := flare.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(flare, "scale", Vector3.ONE * (flare_scale * 1.3), 0.12).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(sphere_inst, "scale", Vector3.ONE * 1.35, 0.12).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	var fade_fn := func(v: float):
+		if is_instance_valid(mat):
+			mat.set_shader_parameter("fade", v)
+		if is_instance_valid(sphere_mat):
+			sphere_mat.set_shader_parameter("fade", v)
+	tw.tween_method(fade_fn, 1.0, 0.0, 0.16)
+	tw.chain().tween_callback(func() -> void:
+		if is_instance_valid(flare):
+			flare.queue_free()
+		if is_instance_valid(sphere_inst):
+			sphere_inst.queue_free()
+	)
+
+	# Las partículas tienen su propio temporizador para caer al suelo antes de ser liberadas
+	var part_timer := parts.get_tree().create_timer(parts.lifetime + 0.08)
+	part_timer.timeout.connect(func() -> void:
+		if is_instance_valid(parts):
+			parts.queue_free()
+	)
 
 func _play_hit_sound(guarded: bool) -> void:
-	var sound_path := "res://Audio/Pelea/Punch.mp3"
-	if FileAccess.file_exists(sound_path) or ResourceLoader.exists(sound_path):
-		var stream = load(sound_path)
-		if stream:
-			var player := AudioStreamPlayer.new()
-			player.stream = stream
-			player.volume_db = -4.0 if guarded else 0.0
-			var parent_scene := get_parent()
-			if parent_scene:
-				parent_scene.add_child(player)
-				player.play()
-				player.finished.connect(player.queue_free)
+	if _hit_sound_stream == null:
+		return
+	var player := AudioStreamPlayer.new()
+	player.stream = _hit_sound_stream
+	player.volume_db = -4.0 if guarded else 0.0
+	var parent_scene := get_parent()
+	if parent_scene:
+		parent_scene.add_child(player)
+		player.play()
+		player.finished.connect(player.queue_free)
 
 func apply_sidestep_motion(dir_z: float, delta: float, speed_mult: float = 1.0) -> void:
 	var my_dir := dir_z
 	var rival_dir := rival.sidestep_dir
 
+	# Rival quieto → orbitar alrededor de él (cámara rota)
 	if rival_dir == 0.0:
-		# El rival está quieto: Orbitamos alrededor de él (La cámara rota)
 		_orbital_sidestep(my_dir, delta, rival.global_position, speed_mult)
+	# Mismo sentido → traslación lateral (la cámara se desplaza sin rotar)
 	elif sign(my_dir) == sign(rival_dir):
-		# Ambos se mueven en la misma dirección: Traslación lateral (La cámara no rota, se desplaza)
 		var cam := fight_plane.cam_dir
 		cam.y = 0.0
 		if cam.length() > 0.001:
 			cam = cam.normalized()
 
-		var move_speed := sidestep_translate_speed * speed_mult
+		var moveSpeed := sidestep_translate_speed * speed_mult
 
-		velocity.x = cam.x * my_dir * move_speed
-		velocity.z = cam.z * my_dir * move_speed
+		velocity.x = cam.x * my_dir * moveSpeed
+		velocity.z = cam.z * my_dir * moveSpeed
 		velocity.y = 0.0
 
 		if not rival.is_detached_from_plane:
-			rival.velocity.x = cam.x * my_dir * move_speed
-			rival.velocity.z = cam.z * my_dir * move_speed
+			rival.velocity.x = cam.x * my_dir * moveSpeed
+			rival.velocity.z = cam.z * my_dir * moveSpeed
+	# Sentidos opuestos → orbitar alrededor del punto medio
 	else:
-		# Se mueven en direcciones opuestas: Orbitamos alrededor del punto medio
 		var mid := (global_position + rival.global_position) * 0.5
 		_orbital_sidestep(my_dir, delta, Vector3(mid.x, 0.0, mid.z), speed_mult)
 
 func _orbital_sidestep(dir_z: float, delta: float, pivot: Vector3, speed_mult: float = 1.0) -> void:
-	# Rotamos el FightPlane (la cámara gira)
 	var angle := dir_z * facing_sign * sidestep_angular_speed * speed_mult * delta
 	fight_plane.global_position = Vector3(pivot.x, 0.0, pivot.z)
 	fight_plane.apply_sidestep(angle)
 
-	# Rotación ANALÍTICA de posiciones alrededor del pivote.
-	# Reemplaza la velocidad tangencial: el clamp radial ya no puede
-	# comerse el movimiento ni espiralar hacia el centro.
+	# Rotación analítica alrededor del pivote: evita espirales y que el clamp radial
+	# se coma el movimiento como pasaba con la velocidad tangencial.
 	_rotate_around_pivot(pivot, angle)
 	velocity.x = 0.0
 	velocity.z = 0.0
 	velocity.y = 0.0
 
-	# El rival solo rota si no está atacando/despegado de la base
 	if not rival.is_detached_from_plane:
 		rival._rotate_around_pivot(pivot, angle)
 		rival.velocity.x = 0.0

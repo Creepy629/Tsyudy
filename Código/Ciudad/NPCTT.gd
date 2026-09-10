@@ -9,8 +9,6 @@ class_name NPCTT
 @onready var collision_node: CollisionShape3D = $CollisionShape3D
 @onready var ray: RayCast3D = $RayCast3D
 
-const dialog_scene: PackedScene = preload("res://Escenas/Nodos/DialogBobbl.tscn")
-
 # ── Exports ────────────────────────────────────────────────────────────────
 @export var gametag: String = ""
 @export var walk_speed: float = 4.0
@@ -53,7 +51,12 @@ var los_lost_timer: float = 0.0
 const TEAM: String = "TT"
 const ENEMY_TEAM: String = "CT"
 const SHOT_PATH := "res://Audio/Ciudad/Counter/ak47.wav"
+const dialog_scene: PackedScene = preload("res://Escenas/Nodos/DialogBobbl.tscn")
 var shot_player: AudioStreamPlayer3D = null
+const LAYER_NPC: int = 2
+const LAYER_PLAYER: int = 4
+const MASK_NEAR: int = 7 # mundo + NPCs + jugador (caos cerca de ti)
+const MASK_FAR: int = 5  # mundo + jugador (lejanos se atraviesan)
 
 # ── Skin fija TT ───────────────────────────────────────────────────────────
 const SKIN_TEX = preload("res://Texturas/Personajes/TTsheet.png")
@@ -64,7 +67,8 @@ const SKIN_POS_Y: float = -0.131
 # ── Estados ────────────────────────────────────────────────────────────────
 enum State {WALKING, WAITING, PLANTING, COMBAT, DEFENDING, DEAD_FROZEN}
 var current_state: State = State.WALKING
-
+var _next_scan_ms: int = 0
+const SCAN_INTERVAL_MS: int = 120
 var nav_map_ready := false
 var SPEED: float = 4.0
 var agent: NavigationAgent3D
@@ -87,10 +91,15 @@ var _was_on_floor: bool = true
 
 # ── Anti-stuck ─────────────────────────────────────────────────────────────
 var _stuck_jumps: int = 0
+var _stuck_fail_count: int = 0
+var _repath_cooldown: float = 0.0
 var last_position := Vector3.ZERO
 var position_check_timer := 0.0
 const POSITION_CHECK_INTERVAL := 0.5
 const STUCK_DIST_THRESHOLD := 0.08
+const UNSTUCK_FAIL_LIMIT: int = 2
+const EMPTY_PATH_REPATH_COOLDOWN: float = 0.5
+const STUCK_REPATH_COOLDOWN: float = 0.35
 
 # ── Diálogo ────────────────────────────────────────────────────────────────
 var speech_streams: Array[AudioStream] = []
@@ -103,6 +112,9 @@ var speech_paths: Array[String] = [
 	"res://Audio/Ciudad/NPCs/live3.wav"
 ]
 var _dialog_timer: float = 0.0
+var _proximity_timer: float = 0.0
+var _player_ref: Node3D = null
+var proximity_collision_radius: float = 5.0
 
 # ── Referencias ────────────────────────────────────────────────────
 var _target_enemy: Node3D = null
@@ -110,6 +122,8 @@ var _target_site: BombSite = null
 
 func _ready() -> void:
 	add_to_group(TEAM)
+	collision_layer = LAYER_NPC
+	collision_mask = MASK_FAR
 	floor_max_angle = deg_to_rad(max_floor_angle_deg)
 	floor_snap_length = floor_snap
 	safe_margin = body_safe_margin
@@ -142,6 +156,7 @@ func _ready() -> void:
 	
 	shot_player = AudioStreamPlayer3D.new()
 	shot_player.volume_db = -6.0
+	shot_player.max_distance = 80.0
 	if FileAccess.file_exists(SHOT_PATH) or ResourceLoader.exists(SHOT_PATH):
 		shot_player.stream = load(SHOT_PATH)
 	else:
@@ -193,16 +208,7 @@ func setup_navigation() -> void:
 	choose_next_objective()
 
 func _check_initial_c4_assignment() -> void:
-	if BombSite.active_planted_site != null or BombSite.dropped_c4_position != Vector3.INF:
-		return
-	var tts: Array = get_tree().get_nodes_in_group(TEAM)
-	var someone_has_c4: bool = false
-	for t in tts:
-		if "has_c4" in t and t.has_c4:
-			someone_has_c4 = true
-			break
-	if not someone_has_c4:
-		has_c4 = true
+	_normalize_c4_ownership()
 
 func set_c4_carrier(state: bool) -> void:
 	has_c4 = state
@@ -210,20 +216,27 @@ func set_c4_carrier(state: bool) -> void:
 # ── Objetivos & Destinos ───────────────────────────────────────────────────
 func choose_next_objective() -> void:
 	if not nav_map_ready: return
-	
+
+	# Si la ronda terminó, no hacer nada especial
+	if _is_round_over():
+		set_random_destination()
+		return
+
 	# Si la C4 ya está plantada, todos a defender el site
 	if BombSite.active_planted_site != null and is_instance_valid(BombSite.active_planted_site):
-		var defend_offset := Vector3(randf_range(-6.0, 6.0), 0, randf_range(-6.0, 6.0))
-		agent.target_position = BombSite.active_planted_site.global_position + defend_offset
-		current_state = State.DEFENDING
-		destination_timer = 0.0
-		destination_interval = randf_range(20.0, 35.0)
-		_stuck_jumps = 0
-		_path_idx = 0
-		SPEED = run_speed
-		_bhop_enabled = randf() < 0.5
-		return
-	
+		var site_state: int = int(BombSite.active_planted_site.current_state)
+		if site_state == BombSite.BombState.PLANTED or site_state == BombSite.BombState.DEFUSING:
+			var defend_offset := Vector3(randf_range(-6.0, 6.0), 0, randf_range(-6.0, 6.0))
+			agent.target_position = BombSite.active_planted_site.global_position + defend_offset
+			current_state = State.DEFENDING
+			destination_timer = 0.0
+			destination_interval = randf_range(20.0, 35.0)
+			_stuck_jumps = 0
+			_path_idx = 0
+			SPEED = run_speed
+			_bhop_enabled = randf() < 0.5
+			return
+
 	# Si la C4 quedó tirada, ir por ella
 	if not has_c4 and BombSite.dropped_c4_position != Vector3.INF:
 		agent.target_position = BombSite.dropped_c4_position
@@ -235,14 +248,13 @@ func choose_next_objective() -> void:
 		SPEED = run_speed
 		_bhop_enabled = randf() < 0.5
 		return
-	
+
 	# Si traigo la C4, elegir site y plantar
 	if has_c4:
 		var sites: Array = get_tree().get_nodes_in_group("BombSite")
 		if not sites.is_empty():
 			if _target_site == null or not is_instance_valid(_target_site):
 				_target_site = sites[randi() % sites.size()] as BombSite
-			
 			if _target_site != null and _target_site.current_state == BombSite.BombState.UNPLANTED:
 				agent.target_position = _target_site.global_position
 				current_state = State.WALKING
@@ -272,7 +284,7 @@ func choose_next_objective() -> void:
 		_bhop_enabled = SPEED > 6.0 and randf() < 0.5
 		return
 
-	# Si no hay portador, a patrullar
+	# Si no hay portador ni C4 tirada, explorar libremente
 	set_random_destination()
 
 func _get_c4_carrier() -> NPCTT:
@@ -314,24 +326,34 @@ func start_waiting() -> void:
 func _do_jump() -> void:
 	velocity.y = jump_velocity
 
+func _do_unstuck_jump() -> void:
+	velocity.y = jump_velocity
+
+	var random_dir := Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0))
+	if random_dir.length_squared() < 0.01:
+		random_dir = Vector3(1.0, 0.0, 0.0)
+
+	random_dir = random_dir.normalized()
+	velocity.x = random_dir.x * SPEED
+	velocity.z = random_dir.z * SPEED
+
 # ── Sistema de Disparo, Muerte e Intangibilidad ────────────────────────────
 func receive_shot(shooter: Node3D) -> void:
 	if current_state == State.DEAD_FROZEN:
 		return
 
-	# ── Fix C4 huérfano: intentar transferir la bomba antes de caer ──────────
+	# Intentar transferir la bomba antes de caer
 	if has_c4:
 		has_c4 = false
-		# Buscar un TT vivo que pueda recogerla
-		var transferred := false
-		for t in get_tree().get_nodes_in_group("TT"):
-			if t != self and t is NPCTT and t.current_state != State.DEAD_FROZEN and not t.has_c4:
-				t.has_c4 = true
-				transferred = true
-				break
-		if not transferred:
-			# No quedan TTs vivos: soltar en el suelo como antes
-			BombSite.drop_c4(global_position, get_tree())
+		_clear_all_c4_flags()
+
+		if BombSite.active_planted_site == null and BombSite.dropped_c4_position == Vector3.INF:
+			var alive: Array[NPCTT] = _get_alive_tts(false)
+			if not alive.is_empty():
+				var chosen: NPCTT = alive[randi() % alive.size()]
+				chosen.has_c4 = true
+			else:
+				BombSite.drop_c4(global_position, get_tree())
 
 	current_state = State.DEAD_FROZEN
 	death_timer = 0.0
@@ -382,11 +404,26 @@ func respawn_to_base() -> void:
 	_path_idx = 0
 	_target_enemy = null
 	_target_site = null
+	has_c4 = false
 	current_state = State.WALKING
 	choose_next_objective()
+	_normalize_c4_ownership()
 
 func _respawn() -> void:
 	respawn_to_base()
+
+func is_dead() -> bool:
+	return current_state == State.DEAD_FROZEN
+
+func _is_enemy_dead(enemy: Node3D) -> bool:
+	if enemy == null or not is_instance_valid(enemy):
+		return true
+
+	var body: CharacterBody3D = enemy as CharacterBody3D
+	if body == null:
+		return false
+
+	return body.collision_layer == 0
 
 # ── Física principal ───────────────────────────────────────────────────────
 func _physics_process(delta: float) -> void:
@@ -398,6 +435,12 @@ func _physics_process(delta: float) -> void:
 		shoot_timer = maxf(0.0, shoot_timer - delta)
 	if grenade_cooldown > 0.0:
 		grenade_cooldown = maxf(0.0, grenade_cooldown - delta)
+	_proximity_timer -= delta
+	if _proximity_timer <= 0.0:
+		_proximity_timer = randf_range(0.4, 0.6)
+		_update_proximity_collision()
+	if _repath_cooldown > 0.0:
+		_repath_cooldown = maxf(0.0, _repath_cooldown - delta)
 
 	if is_blinded:
 		blind_timer -= delta
@@ -478,8 +521,23 @@ func _process_planting(_delta: float) -> void:
 
 func _process_combat(delta: float) -> void:
 	combat_timer += delta
+
+	# Si la ronda terminó o no hay enemigo válido, salir de combate
+	if _is_round_over() or _target_enemy == null or not is_instance_valid(_target_enemy) or _is_enemy_dead(_target_enemy):
+		_target_enemy = null
+		combat_timer = 0.0
+		los_lost_timer = 0.0
+		choose_next_objective()
+		return
+
+	if _is_round_over():
+		_target_enemy = null
+		combat_timer = 0.0
+		los_lost_timer = 0.0
+		choose_next_objective()
+		return
 	
-	if _target_enemy == null or not is_instance_valid(_target_enemy) or ("current_state" in _target_enemy and _target_enemy.current_state == State.DEAD_FROZEN) or is_blinded:
+	if _target_enemy == null or not is_instance_valid(_target_enemy) or _is_enemy_dead(_target_enemy) or is_blinded:
 		_target_enemy = null
 		combat_timer = 0.0
 		los_lost_timer = 0.0
@@ -559,22 +617,26 @@ func _process_combat(delta: float) -> void:
 
 func _process_walking(delta: float) -> void:
 	combat_timer = 0.0
-	
 	# Escanear enemigos (si no está cegado)
 	if not is_blinded and _scan_for_enemies():
 		return
 
+	if _is_round_over() and destination_timer > 1.0:
+		choose_next_objective()
+		return
+
 	# Recoger C4 si está en el suelo y paso cerca
-	if not has_c4 and BombSite.dropped_c4_position != Vector3.INF:
+	if not has_c4 and BombSite.dropped_c4_position != Vector3.INF and not _is_round_over():
 		var dist_to_c4 := global_position.distance_to(BombSite.dropped_c4_position)
 		if dist_to_c4 <= 1.8:
+			_clear_all_c4_flags()
 			has_c4 = true
 			BombSite.remove_dropped_c4()
 			choose_next_objective()
 			return
 
 	# Si llevo la C4, comprobar si llegué al site para plantar
-	if has_c4 and BombSite.active_planted_site == null:
+	if has_c4 and BombSite.active_planted_site == null and not _is_round_over():
 		var sites: Array = get_tree().get_nodes_in_group("BombSite")
 		for s in sites:
 			if s is BombSite and (s as BombSite).is_npc_in_site(self):
@@ -592,7 +654,14 @@ func _process_walking(delta: float) -> void:
 	var target_xz := Vector2(agent.target_position.x, agent.target_position.z)
 	var pos_xz := Vector2(global_position.x, global_position.z)
 	var path := agent.get_current_navigation_path()
-	
+
+	if path.is_empty() and destination_timer > PATH_CALC_GRACE and _repath_cooldown <= 0.0:
+		_repath_cooldown = EMPTY_PATH_REPATH_COOLDOWN
+		_stuck_jumps = 0
+		_stuck_fail_count = 0
+		choose_next_objective()
+		return
+
 	var reached: bool = false
 	if agent.is_navigation_finished() or pos_xz.distance_to(target_xz) < ARRIVE_DIST:
 		reached = true
@@ -606,13 +675,22 @@ func _process_walking(delta: float) -> void:
 	else:
 		_avance(delta)
 
-	if current_state == State.WALKING and spawned and check_if_stuck(delta):
+	if current_state != State.COMBAT and spawned and check_if_stuck(delta):
 		if is_on_floor() and _stuck_jumps < stuck_jump_limit:
 			_stuck_jumps += 1
-			_do_jump()
+			_do_unstuck_jump()
 		else:
+			_stuck_fail_count += 1
 			_stuck_jumps = 0
-			choose_next_objective()
+			position_check_timer = 0.0
+			last_position = global_position
+			_repath_cooldown = STUCK_REPATH_COOLDOWN
+
+			if _stuck_fail_count >= UNSTUCK_FAIL_LIMIT:
+				_stuck_fail_count = 0
+				set_random_destination()
+			else:
+				choose_next_objective()
 
 	_update_audio()
 	move_and_slide()
@@ -620,17 +698,23 @@ func _process_walking(delta: float) -> void:
 # ── Escaneo de enemigos con RayCast ────────────────────────────────────────
 func _scan_for_enemies() -> bool:
 	if is_blinded: return false
+
+	var now_ms: int = Time.get_ticks_msec()
+	if now_ms < _next_scan_ms:
+		return false
+	_next_scan_ms = now_ms + SCAN_INTERVAL_MS + (randi() % 50)
+
 	var enemies: Array = get_tree().get_nodes_in_group(ENEMY_TEAM)
 	var closest_enemy: Node3D = null
 	var closest_dist: float = 9999.0
 
 	for enemy in enemies:
 		if not enemy is Node3D: continue
-		if "current_state" in enemy and enemy.current_state == State.DEAD_FROZEN:
-			continue
-
-		var dist: float = global_position.distance_to((enemy as Node3D).global_position)
+		var enemy_node: Node3D = enemy as Node3D
+		var dist: float = global_position.distance_to(enemy_node.global_position)
 		if dist > detection_radius:
+			continue
+		if _is_enemy_dead(enemy_node):
 			continue
 
 		var is_blocked: bool = false
@@ -663,7 +747,13 @@ func _shoot_at_enemy(enemy: Node3D) -> void:
 			enemy.call("receive_shot", self)
 
 func _play_shot() -> void:
-	if shot_player != null and shot_player.stream != null:
+	if shot_player == null:
+		return
+	if shot_player.stream == null and ResourceLoader.exists(SHOT_PATH):
+		var stream: Resource = load(SHOT_PATH)
+		if stream is AudioStream:
+			shot_player.stream = stream
+	if shot_player.stream != null:
 		shot_player.play()
 
 # ── Movimiento ─────────────────────────────────────────────────────────────
@@ -746,16 +836,37 @@ func _get_separation_vector() -> Vector2:
 func check_if_stuck(delta: float) -> bool:
 	if not spawned:
 		return false
+
 	position_check_timer += delta
-	if position_check_timer >= POSITION_CHECK_INTERVAL:
-		var moved: float = global_position.distance_to(last_position)
-		var is_stuck: bool = moved < STUCK_DIST_THRESHOLD
-		if not is_stuck:
-			_stuck_jumps = 0
-		last_position = global_position
-		position_check_timer = 0.0
-		return is_stuck
-	return false
+	if position_check_timer < POSITION_CHECK_INTERVAL:
+		return false
+
+	var moved: float = global_position.distance_to(last_position)
+	var is_stuck: bool = moved < STUCK_DIST_THRESHOLD
+
+	position_check_timer = 0.0
+	last_position = global_position
+
+	if not is_stuck:
+		_stuck_jumps = 0
+		_stuck_fail_count = 0
+
+	return is_stuck
+
+# ── Colisión por cercanía: caos físico solo dentro de tu burbuja ─────────────
+func _update_proximity_collision() -> void:
+	if current_state == State.DEAD_FROZEN:
+		return
+
+	if _player_ref == null or not is_instance_valid(_player_ref):
+		var found: Node = get_tree().current_scene.find_child("Jugador", true, false)
+		if found is Node3D:
+			_player_ref = found as Node3D
+		else:
+			return
+
+	var d: float = global_position.distance_to(_player_ref.global_position)
+	collision_mask = MASK_NEAR if d <= proximity_collision_radius else MASK_FAR
 
 func check_player_collision() -> bool:
 	for i in get_slide_collision_count():
@@ -806,3 +917,53 @@ func _apply_skin() -> void:
 
 func aplicar_skin_aleatoria() -> void:
 	_apply_skin()
+
+func _is_round_over() -> bool:
+	var site_node: Node = BombSite.active_planted_site as Node
+	if site_node == null or not is_instance_valid(site_node):
+		return false
+
+	var site: BombSite = site_node as BombSite
+	if site == null:
+		return false
+
+	var st: int = int(site.current_state)
+	return st == BombSite.BombState.DEFUSED or st == BombSite.BombState.EXPLODED or st == BombSite.BombState.TIMEOUT
+
+func _clear_all_c4_flags() -> void:
+	for t in get_tree().get_nodes_in_group(TEAM):
+		if t is NPCTT:
+			(t as NPCTT).has_c4 = false
+
+func _get_alive_tts(include_self: bool) -> Array[NPCTT]:
+	var alive: Array[NPCTT] = []
+	for t in get_tree().get_nodes_in_group(TEAM):
+		if t is NPCTT:
+			var tt: NPCTT = t as NPCTT
+			if tt.current_state != State.DEAD_FROZEN and (include_self or tt != self):
+				alive.append(tt)
+	return alive
+
+func _normalize_c4_ownership() -> void:
+	if BombSite.active_planted_site != null or BombSite.dropped_c4_position != Vector3.INF:
+		_clear_all_c4_flags()
+		return
+
+	var carriers: Array[NPCTT] = []
+	for t in get_tree().get_nodes_in_group(TEAM):
+		if t is NPCTT:
+			var tt: NPCTT = t as NPCTT
+			if tt.current_state != State.DEAD_FROZEN and tt.has_c4:
+				carriers.append(tt)
+
+	if carriers.is_empty():
+		var alive: Array[NPCTT] = _get_alive_tts(true)
+		if not alive.is_empty():
+			var chosen: NPCTT = alive[randi() % alive.size()]
+			chosen.has_c4 = true
+		return
+
+	if carriers.size() > 1:
+		var keep: NPCTT = carriers[randi() % carriers.size()]
+		_clear_all_c4_flags()
+		keep.has_c4 = true

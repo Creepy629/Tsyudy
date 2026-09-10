@@ -5,7 +5,7 @@ extends Node
 @export var rounds_to_win: int = 2
 @export var announcer_folder := "res://Audio/Pelea/Comentarista/"
 @export var music_folder := "res://Audio/Pelea/Concierto/"
-@export var start_distance := 5.0
+@export var start_distance := 3.0
 @export var show_debug_boxes := false
 @export var return_to_city: bool = false
 @export var city_scene_path: String = "res://Escenas/Mapas/de_dust2.tscn"
@@ -76,21 +76,47 @@ func _set_debug_boxes_recursive(node: Node, visible: bool) -> void:
 		_set_debug_boxes_recursive(child, visible)
 
 func _apply_start_positions() -> void:
+	var y1: float = p1_start.y
+	var y2: float = p2_start.y
+
+	if p1.fight_plane:
+		p1.global_position = p1.fight_plane.get_projected_position(p1_start)
+		p2.global_position = p2.fight_plane.get_projected_position(p2_start)
+		p1.global_position.y = y1
+		p2.global_position.y = y2
+
 	var fd := p1.get_fight_axis()
-	var mid := (p1_start + p2_start) * 0.5
-	mid.y = 0.0
-	p1.global_position = Vector3(mid.x, p1_start.y, mid.z) - fd * (start_distance * 0.5)
-	p2.global_position = Vector3(mid.x, p2_start.y, mid.z) + fd * (start_distance * 0.5)
+	var d: float = fd.dot(p2.global_position - p1.global_position)
+	var sign_d: float = 1.0 if d >= 0.0 else -1.0
+	if abs(d) < 0.01:
+		var raw := Vector3(p2_start.x - p1_start.x, 0.0, p2_start.z - p1_start.z)
+		sign_d = 1.0 if raw.dot(fd) >= 0.0 else -1.0
+
+	if abs(d) < start_distance:
+		var mid := (p1.global_position + p2.global_position) * 0.5
+		mid.y = 0.0
+		p1.global_position = mid - fd * (start_distance * 0.5) * sign_d
+		p2.global_position = mid + fd * (start_distance * 0.5) * sign_d
+		p1.global_position.y = y1
+		p2.global_position.y = y2
+
+	if p1.fight_plane:
+		var m := (p1.global_position + p2.global_position) * 0.5
+		p1.fight_plane.global_position = Vector3(m.x, 0.0, m.z)
+
+	var parent := get_parent()
+	if parent:
+		var cam := parent.get_node_or_null("ArenaSpringArm")
+		if cam and cam.has_method("snap_to_target"):
+			cam.snap_to_target()
 
 func _setup_ui() -> void:
-	# Overlay de flash
 	_flash_overlay = ColorRect.new()
 	_flash_overlay.color = Color(0, 0, 0, 0)
 	_flash_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_flash_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_flash_overlay)
 
-	# Viñeta cinematográfica
 	_vignette = ColorRect.new()
 	_vignette.color = Color(0, 0, 0, 0.3)
 	_vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -110,7 +136,6 @@ func _setup_ui() -> void:
 	_vignette.material = mat
 	add_child(_vignette)
 
-	# Labels de centro (anuncios)
 	var cl := CanvasLayer.new()
 	add_child(cl)
 	_label_center = Label.new()
@@ -192,7 +217,7 @@ func _start_music() -> void:
 			_music.stream = stream
 			_music.play()
 
-# ─── Flow de fases ───────────────────────────────────────────────────────────
+# ── Flow de Fases ────────────────────────────────────────────────────────────
 func _begin_round_intro() -> void:
 	_phase = "INTRO"
 	_phase_timer = 0.0
@@ -241,18 +266,16 @@ func _process(delta: float) -> void:
 				else:
 					get_tree().change_scene_to_file("res://Escenas/Pelea/CharacterSelect.tscn")
 
-# ─── Detección de golpes ─────────────────────────────────────────────────────
+# ── Detección de Golpes ──────────────────────────────────────────────────────
 func _on_health_changed(current: int, _max_hp: int, victim: FighterBody) -> void:
 	if _phase != "FIGHT":
 		return
 	var attacker_id := 2 if victim == p1 else 1
-	# Counter (solo audio, el texto lo maneja BattleUI)
 	if victim.state_machine.current_action == victim.state_machine.ActionState.ATTACK:
 		counter_active = true
 		_play_announcer("Counter.wav")
 	else:
 		counter_active = false
-	# Combo: contador para BattleUI y para determinar winner
 	if victim.state_machine.current_action == victim.state_machine.ActionState.HIT:
 		_combo[attacker_id] += 1
 	else:
@@ -333,12 +356,12 @@ func _reset_round() -> void:
 	_label_sub.visible = false
 	_begin_round_intro()
 
-# ─── Efecto de flash ─────────────────────────────────────────────────────────
+# ── Efecto de Flash ──────────────────────────────────────────────────────────
 func _flash(color: Color, intensity: float) -> void:
 	if _flash_overlay:
 		_flash_overlay.color = Color(color.r, color.g, color.b, intensity)
 
-# ── Titulares deslizantes molones ─────────────────────────────────────────
+# ── Titulares Deslizantes ────────────────────────────────────────────────────
 var _hl_wired := false
 var _hl_combo := {1: 0, 2: 0}
 var _hl_uppercuts := {1: 0, 2: 0}
@@ -368,17 +391,14 @@ func _hl_on_hit(current_hp: int, _max_hp: int, side: int) -> void:
 	if not victim or not victim.state_machine:
 		return
 	var v_action = victim.state_machine.current_action
-	# COUNTER: la víctima estaba en pleno ataque al recibir
 	if v_action == victim.state_machine.ActionState.ATTACK:
 		_headline("COUNTER!", attacker_side, true)
-	# HITS: la víctima ya estaba en hitstun → el combo continúa
 	if v_action == victim.state_machine.ActionState.HIT:
 		_hl_combo[attacker_side] = int(_hl_combo[attacker_side]) + 1
 	else:
 		_hl_combo[attacker_side] = 1
 	if int(_hl_combo[attacker_side]) >= 2:
 		_headline("%d HITS!" % int(_hl_combo[attacker_side]), attacker_side, false)
-	# PERFECT: KO con la vida llena
 	if current_hp <= 0:
 		var winner := _hl_p1 if attacker_side == 1 else _hl_p2
 		if winner and int(winner.stats.get("current_health", 0)) >= int(winner.stats.get("max_health", 100)):
@@ -392,7 +412,7 @@ func _hl_on_uppercut(_attacker: FighterBody, side: int) -> void:
 		if has_method("_play_announcer"):
 			_play_announcer("Toasty.wav")
 
-# ── Música ────────────────────────────────────────────────────────────────
+# ── Música ───────────────────────────────────────────────────────────────────
 func _bgm_wire() -> void:
 	if _bgm_player and is_instance_valid(_bgm_player):
 		return

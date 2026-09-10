@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://bdoswba5cr8fm"
-path="res://.godot/imported/LFAXD.TTF-288052ce96ef9924c40c38e998932ebe.fontdata"
+uid="uid://dc2hocpnt6q1s"
+path="res://.godot/imported/TimesNewerRoman-Regular.otf-32b166d3ecdf05bc5347a3540ce34975.fontdata"
 
 [deps]
 
-source_file="res://Fuentes/LFAXD.TTF"
-dest_files=["res://.godot/imported/LFAXD.TTF-288052ce96ef9924c40c38e998932ebe.fontdata"]
+source_file="res://Fuentes/TimesNewerRoman-Regular.otf"
+dest_files=["res://.godot/imported/TimesNewerRoman-Regular.otf-32b166d3ecdf05bc5347a3540ce34975.fontdata"]
 
 [params]
 

@@ -11,7 +11,6 @@ var _sequence: Array = []
 var _frame_index: int = 0
 var _timer: float = 0.0
 var _path: String = ""
-var _debug_printed: bool = false
 
 func _ready() -> void:
 	billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
@@ -22,7 +21,6 @@ func set_character(char_name: String) -> void:
 	_frame_index = 0
 	_timer = 0.0
 	_sequence = []
-	_debug_printed = false
 
 	if character_name == "":
 		texture = null
@@ -72,14 +70,3 @@ func _apply_metrics() -> void:
 	pixel_size = 1.0 / pixels_per_meter
 	scale = Vector3.ONE * effective_scale
 	position.y = ((float(texture.get_height()) / pixels_per_meter) / 2.0) * effective_scale
-
-	if not _debug_printed:
-		_debug_printed = true
-		print("[CharacterPreview] %s | ppm=%f preview_scale=%f size_multiplier=%f effective=%f h_px=%d" % [
-			character_name,
-			pixels_per_meter,
-			preview_scale,
-			size_multiplier,
-			effective_scale,
-			texture.get_height()
-		])

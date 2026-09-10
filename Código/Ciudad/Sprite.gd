@@ -1,9 +1,10 @@
 extends Sprite3D
+
 @onready var cam: Camera3D = get_node("/root/Node3D/Jugador/Pivote/Camera3D")
 @onready var look: MeshInstance3D = get_node("/root/Node3D/Jugador/CollisionShape3D/MeshInstance3D")
 @onready var guy: CharacterBody3D = get_node("/root/Node3D/Jugador")
-var anim_frame := 0
-var frame_timer := 0.0
+var animFrame := 0
+var frameTimer := 0.0
 @export var anim_speed := 15.0
 
 # Aparentemente este código ya no es necesario, pero
@@ -31,34 +32,34 @@ func get_direction_index(angle: float) -> int:
 		return 84
 	else:
 		return 0
-	
+
 func _process(delta: float) -> void:
-	var to_cam = cam.global_position - global_position
-	to_cam.y = 0
-	look_at(global_position + to_cam.normalized(), Vector3.UP)
+	var toCam = cam.global_position - global_position
+	toCam.y = 0
+	look_at(global_position + toCam.normalized(), Vector3.UP)
 
-	var to_look = look.global_position - global_position
-	to_look.y = 0
+	var toLook = look.global_position - global_position
+	toLook.y = 0
 
-	var angle = atan2(to_look.x, to_look.z) + atan2(-to_cam.x, to_cam.z)
-	var dir_index = get_direction_index(angle)
+	var angle = atan2(toLook.x, toLook.z) + atan2(-toCam.x, toCam.z)
+	var dirIndex = get_direction_index(angle)
 
-	var is_moving := check_if_moving()
+	var isMoving := checkIfMoving()
 
 	if Input.is_action_pressed("Correr") or !guy.is_on_floor():
 		anim_speed = 30.0
 	else:
 		anim_speed = 15.0
-	if is_moving:
-		frame_timer += delta * anim_speed
-		anim_frame = int(frame_timer) % 12
+	if isMoving:
+		frameTimer += delta * anim_speed
+		animFrame = int(frameTimer) % 12
 	else:
-		anim_frame = 0
-		frame_timer = 0.0
+		animFrame = 0
+		frameTimer = 0.0
 
-	frame = dir_index + anim_frame
+	frame = dirIndex + animFrame
 
-func check_if_moving() -> bool:
+func checkIfMoving() -> bool:
 	var parent := get_parent()
 	if parent is CharacterBody3D:
 		return parent.velocity.length() > 0.05

@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://dnkjop0kp37x3"
-path="res://.godot/imported/LFAXDI.TTF-2a119a4571023653ea35fe75154410ef.fontdata"
+uid="uid://bcr3sja4agp22"
+path="res://.godot/imported/TimesNewerRoman-Bold.otf-5aa2ac1055b468ddb471bdba0394a8ae.fontdata"
 
 [deps]
 
-source_file="res://Fuentes/LFAXDI.TTF"
-dest_files=["res://.godot/imported/LFAXDI.TTF-2a119a4571023653ea35fe75154410ef.fontdata"]
+source_file="res://Fuentes/TimesNewerRoman-Bold.otf"
+dest_files=["res://.godot/imported/TimesNewerRoman-Bold.otf-5aa2ac1055b468ddb471bdba0394a8ae.fontdata"]
 
 [params]
 

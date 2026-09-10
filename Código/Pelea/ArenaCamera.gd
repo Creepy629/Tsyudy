@@ -6,7 +6,7 @@ class_name ArenaCamera
 @export var fight_plane_path: NodePath
 var _fight_plane: FightPlane
 
-# ── Configuración base ──────────────────────────────────────────────────────
+# ── Configuración Base ──────────────────────────────────────────────────────
 @export var base_spring_length: float = 1.9
 @export var spring_length_per_distance: float = 0.5
 @export var min_spring_length: float = 1.7
@@ -24,13 +24,16 @@ var _fight_plane: FightPlane
 @export var enable_camera_walls: bool = true
 @export var wall_margin: float = 0.85
 @export var wall_padding: float = 0.5
-@export var wall_debug: bool = false
 
 var _wall_camera: Camera3D
 var _p1: Node3D
 var _p2: Node3D
 var _shake_amount: float = 0.0
 var _shake_time: float = 0.0
+var _first_frame: bool = true
+
+func snap_to_target() -> void:
+	_first_frame = true
 
 func _ready() -> void:
 	if not player1.is_empty() and has_node(player1):
@@ -50,7 +53,6 @@ func _ready() -> void:
 	
 	_wall_camera = _get_camera()
 
-	# Escuchar señales de hitstop para shake
 	var hs := get_node_or_null("/root/Hitstop")
 	if hs and hs.has_signal("hitstop_triggered"):
 		hs.hitstop_triggered.connect(_on_hitstop)
@@ -63,7 +65,6 @@ func _process(delta: float) -> void:
 	if not _p1 or not _p2:
 		return
 	
-	# Shake de cámara
 	var shake_x: float = 0.0
 	var shake_y: float = 0.0
 	if _shake_amount > 0.001:
@@ -72,26 +73,15 @@ func _process(delta: float) -> void:
 		shake_y = cos(_shake_time * 2.3) * _shake_amount * 0.6
 		_shake_amount = max(0.0, _shake_amount - delta * 4.0)
 	
-	if enable_camera_walls:
-		_apply_camera_walls(delta)
-	
 	var p1_pos: Vector3 = _p1.global_position
 	var p2_pos: Vector3 = _p2.global_position
 	
-	# Punto medio entre jugadores
 	var midpoint := Vector3(
 		(p1_pos.x + p2_pos.x) * 0.5,
-		(p1_pos.y + p2_pos.y) * 0.5 + height_offset,
+		minf(p1_pos.y, p2_pos.y) + height_offset,
 		(p1_pos.z + p2_pos.z) * 0.5
 	)
 	
-	# Añadir shake
-	midpoint.x += shake_x
-	midpoint.y += shake_y
-	
-	global_position = global_position.lerp(midpoint, position_lerp_speed * delta)
-	
-	# Orientación del SpringArm
 	var cam_dir := Vector3.FORWARD
 	var fight_dir := Vector3.RIGHT
 	
@@ -106,12 +96,23 @@ func _process(delta: float) -> void:
 	x_axis = y_axis.cross(z_axis).normalized()
 	global_basis = Basis(x_axis, y_axis, z_axis)
 	
-	# Zoom dinámico
 	var fight_vec := Vector3(p2_pos.x - p1_pos.x, 0.0, p2_pos.z - p1_pos.z)
 	var dist: float = fight_vec.length()
 	var target_length: float = base_spring_length + dist * spring_length_per_distance
 	target_length = clamp(target_length, min_spring_length, max_spring_length)
-	spring_length = lerp(spring_length, target_length, zoom_lerp_speed * delta)
+	
+	if _first_frame:
+		_first_frame = false
+		spring_length = target_length
+		global_position = midpoint
+	else:
+		spring_length = lerp(spring_length, target_length, zoom_lerp_speed * delta)
+		midpoint.x += shake_x
+		midpoint.y += shake_y
+		global_position = global_position.lerp(midpoint, position_lerp_speed * delta)
+
+	if enable_camera_walls:
+		_apply_camera_walls(delta)
 
 func _get_camera() -> Camera3D:
 	if _wall_camera and is_instance_valid(_wall_camera):
@@ -135,27 +136,20 @@ func _apply_camera_walls(_delta: float) -> void:
 	else:
 		f_dir = Vector3.RIGHT
 
-	var cam_pos := cam.global_position
-	var cam_right := cam.global_basis.x
-	var cam_forward := -cam.global_basis.z
+	var cam_forward := -global_basis.z
+	var cam_right := global_basis.x
+	var cam_pos := global_position - cam_forward * spring_length
 
 	for player in [_p1, _p2]:
 		var pos: Vector3 = player.global_position
 		var to_player := pos - cam_pos
 		var depth := to_player.dot(cam_forward)
-		if depth <= 0.05:
+		if depth <= 0.1:
 			continue
 
 		var half_width := _get_half_width_for_depth(depth, cam)
-		var max_offset := maxf(0.1, half_width * wall_margin - wall_padding)
+		var max_offset := maxf(1.5, half_width * wall_margin - wall_padding)
 		var screen_x := to_player.dot(cam_right)
-
-		if wall_debug and Engine.get_process_frames() % 30 == 0:
-			print_debug(
-				player.name,
-				" screen_x=", snappedf(screen_x, 0.01),
-				" | max=", snappedf(max_offset, 0.01)
-			)
 
 		if abs(screen_x) <= max_offset:
 			continue

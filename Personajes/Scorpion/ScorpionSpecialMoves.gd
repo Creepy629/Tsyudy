@@ -14,11 +14,11 @@ func get_universal_animations() -> Dictionary:
 		"jump_up": ["F3", "F4", "F5"],
 		"jump_fall": ["F7"],
 		"hit_ground": ["J1", "J1", "J2", "J2"],
-		"hit_air": ["K9", "K10", "K10", "K12", "K14"],
+		"hit_air": ["J10", "J11", "J12", "J13", "J14"],
 		"dash": ["C1"],
 		"knockdown": ["J9"],
-		"guard_stand": ["J2"],
-		"guard_crouch": ["J4"]
+		"guard_stand": ["I2"],
+		"guard_crouch": ["I4"]
 	}
 
 # ─── Combos de input ─────────────────────────────────────────────────────
@@ -58,6 +58,7 @@ var crouch_heavykick_combo: Array = [
 # ─── Init ────────────────────────────────────────────────────────────────
 func _init_special_moves(f: FighterBody) -> void:
 	fighter = f
+	fighter.hurtbox_scale = Vector3(1.0, 1.05, 1.0) # perfil: más alto
 	fighter.stats.jump_velocity = 5.5
 	fighter.stats.dash_speed = 4.2
 	fighter.stats.backdash_speed = 4.5

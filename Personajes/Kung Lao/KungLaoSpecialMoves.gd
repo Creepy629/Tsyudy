@@ -47,7 +47,7 @@ func get_universal_animations() -> Dictionary:
 		"jump_up": ["F4", "F5", "F6"],
 		"jump_fall": ["F7", "F9", "F10"],
 		"hit_ground": ["K1", "K1", "K2", "K2"],
-		"hit_air": ["K3", "K4"],
+		"hit_air": ["K10", "K10", "K11", "K12", "K14"],
 		"dash": ["C1", "C2"],
 		"knockdown": ["K15"],
 		"guard_stand": ["J1"],
@@ -57,6 +57,7 @@ func get_universal_animations() -> Dictionary:
 # ─── Init ───────────────────────────────────────────────────────────────────
 func _init_special_moves(f: FighterBody) -> void:
 	fighter = f
+	fighter.hurtbox_scale = Vector3(0.95, 1.0, 0.9) # perfil: más delgado
 	fighter.stats.walk_speed = 2.6
 	fighter.stats.jump_velocity = 5.5
 	fighter.stats.dash_speed = 4.5

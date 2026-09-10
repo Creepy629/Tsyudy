@@ -11,21 +11,20 @@ var is_knocked_down := false
 var _was_launched := false
 var _kd_timer := 0.0
 var fighter: FighterBody
-var wants_up
 var is_blocking := false
 var _combo_received := 0
 
-# --- Tiempos ---
+# ── Temporizadores ────────────────────────────────────────────────────────────
 var action_timer := 0.0
 var move_timer := 0.0
 
-# --- Parámetros de Acción ---
+# ── Parámetros de Acción ──────────────────────────────────────────────────────
 var action_duration := 0.0
 var advance_speed := 0.0
 var current_hitbox: Node
 var attached_hitbox: Node = null
 
-# --- Parámetros de Movimiento ---
+# ── Parámetros de Movimiento ──────────────────────────────────────────────────
 var _locked_vel_x := 0.0
 var _locked_vel_z := 0.0
 var _sidestep_dir_locked := 0.0
@@ -46,19 +45,18 @@ const SIDESTEP_HOLD_SPEED_MULT := 0.6
 const SS_BURST_SPEED := 9.0
 const SS_BURST_DECAY_TIME := 0.12
 const SS_WALK_SPEED := 3.0
+const AIR_HURTBOX_HEIGHT_MULT := 0.8
+const KD_HURTBOX_HEIGHT_MULT := 0.45
+const KD_HURTBOX_LENGTH_MULT := 2.8
 
 func _init(f: FighterBody):
 	fighter = f
 
 func process_machine(delta: float, input: Dictionary) -> void:
-	# Actualizar temporizadores
 	if current_action != ActionState.IDLE:
 		action_timer += delta
-		
-	# Lógica de Acciones
-	_process_action_state(delta, input)
 	
-	# Lógica de Movimiento
+	_process_action_state(delta, input)
 	_process_move_state(delta, input)
 
 	_update_hurtbox_shape(input)
@@ -93,17 +91,16 @@ func _process_action_state(delta: float, input: Dictionary) -> void:
 				_end_action()
 				return
 
-			# --- AVANCE DE FRAMES (Asumiendo 60 FPS) ---
+			# Avance de frames (asumiendo 60 FPS)
 			_frame_accumulator += delta * 60.0
 			var current_step = _attack_timeline[_timeline_idx]
 			var step_frames = current_step.get("frames", 1)
 
-			# Si ya pasamos los frames de este paso, avanzamos al siguiente
 			if _frame_accumulator >= step_frames:
-				_frame_accumulator -= step_frames # Restamos para no perder frames residuales
+				_frame_accumulator -= step_frames
 				_advance_to_next_step()
 
-			# --- Lógica de avance de hitbox por velocidad ---
+			# Lógica de avance de hitbox por velocidad
 			if _hitbox_velocity != Vector3.ZERO:
 				var hitbox: Hitbox = null
 				for child in fighter.get_children():
@@ -124,7 +121,7 @@ func _process_action_state(delta: float, input: Dictionary) -> void:
 				fighter.velocity.z = lerp(fighter.velocity.z, 0.0, 10.0 * delta)
 		
 		ActionState.HIT:
-			# --- KNOCKDOWN: tirado en el suelo ---
+			# Tirado en el suelo
 			if is_knocked_down:
 				_kd_timer += delta
 				fighter.velocity.x = 0.0
@@ -147,7 +144,7 @@ func _process_action_state(delta: float, input: Dictionary) -> void:
 						_end_action()
 				return
 
-			# --- ATTACH: pegado a la hitbox (el gancho lo arrastra) ---
+			# Pegado a la hitbox (el gancho lo arrastra)
 			if attached_hitbox != null and is_instance_valid(attached_hitbox) and attached_hitbox.visible:
 				var to_target: Vector3 = attached_hitbox.global_position - fighter.global_position
 				to_target.y = 0.0
@@ -166,7 +163,7 @@ func _process_action_state(delta: float, input: Dictionary) -> void:
 				fighter.velocity.x = lerp(fighter.velocity.x, 0.0, 6.0 * delta)
 				fighter.velocity.z = lerp(fighter.velocity.z, 0.0, 6.0 * delta)
 				
-			# --- BLINDAJE AÉREO: si fue lanzado, el hitstun NO expira en el aire.
+			# Si fue lanzado, el hitstun NO expira en el aire.
 			# Se queda en HIT hasta aterrizar; ahí el landing lo manda a knockdown.
 			if _was_launched and current_move == MoveState.AIR:
 				return
@@ -190,7 +187,7 @@ func _end_action() -> void:
 	current_attack_name = ""
 	_attack_timeline.clear()
 	_timeline_idx = -1
-	_attack_advance_speed = 0.0 # FIX: Reseteamos la velocidad de avance para no deslizarnos
+	_attack_advance_speed = 0.0
 	current_hitbox = null
 	fighter.exit_attack_mode()
 
@@ -239,11 +236,14 @@ func _process_move_state(delta: float, input: Dictionary) -> void:
 	# Máquina de Movimiento ---
 	match current_move:
 		MoveState.GROUND:
-			# Bloquear movimiento si estamos en Hitstun
 			if current_action == ActionState.HIT:
 				return
-
 			if current_action == ActionState.ATTACK:
+				return
+			# Con guardia activa: plantado, sin caminar ni saltar
+			if input.get("guard", false):
+				fighter.velocity.x = lerp(fighter.velocity.x, 0.0, 12.0 * delta)
+				fighter.velocity.z = lerp(fighter.velocity.z, 0.0, 12.0 * delta)
 				return
 
 			# facing_sign  1 = personaje a la IZQUIERDA (D = adelante)
@@ -281,7 +281,6 @@ func _process_move_state(delta: float, input: Dictionary) -> void:
 				fighter.velocity.z = lerp(fighter.velocity.z, 0.0, 12.0 * delta)
 
 		MoveState.AIR:
-			# Si estamos atacando con velocidad de avance, el ataque gobierna la trayectoria horizontal
 			if current_action == ActionState.ATTACK and _attack_advance_speed != 0.0:
 				pass
 			else:
@@ -389,7 +388,7 @@ func _start_dash_or_backdash(_dir_input: float, fight_dir: Vector3, is_forward: 
 		fighter.velocity.x = - fight_dir.x * fighter.facing_sign * speed
 		fighter.velocity.z = - fight_dir.z * fighter.facing_sign * speed
 
-# Recibe un Array de pasos (Timeline), velocidad de avance, hitstop global y opcionalmente el nombre del ataque
+# Recibe la timeline del ataque: Array de pasos, velocidad de avance y nombre opcional
 func start_attack(timeline: Array, advance: float = 0.0, hitstop: float = 0.15, attack_name: String = "") -> void:
 	current_action = ActionState.ATTACK
 	current_attack_name = attack_name
@@ -482,12 +481,15 @@ func _advance_to_next_step() -> void:
 			
 			hitbox.is_low = step.get("low", false)
 			
-			# Tamaño y posición de hitbox dinámico
-			if step.has("size"):
-				hitbox.resize_hitbox(step["size"])
-			
-			if step.has("offset"):
-				hitbox.reposition_hitbox(step["offset"])
+			# Tamaño y posición de hitbox dinámico.
+			# Compatible con timelines viejos, pero ahora aplica size+offset como una unidad.
+			if hitbox.has_method("apply_timeline_step"):
+				hitbox.apply_timeline_step(step)
+			else:
+				if step.has("size") and step["size"] is Vector3:
+					hitbox.resize_hitbox(step["size"] as Vector3)
+				if step.has("offset") and step["offset"] is Vector3:
+					hitbox.reposition_hitbox(step["offset"] as Vector3)
 			
 			# Hitbox velocity
 			if step.has("velocity"):
@@ -566,11 +568,11 @@ func _update_hurtbox_shape(input: Dictionary) -> void:
 	var default_size := hurtbox._default_hurtbox_size
 	var default_offset := hurtbox._default_hurtbox_offset
 
-	# Lanzado en HIT o salto normal
+	# Lanzado en HIT o salto normal: huella IDLE, un poco más corta de altura.
+	# El offset baja la mitad de lo recortado para que la base siga en los pies.
 	if current_move == MoveState.AIR:
-		# La hitbox se recorta a la mitad del alto y se centra en la parte superior
-		var air_size := Vector3(default_size.x * 0.7, default_size.y * 0.5, default_size.z * 0.7)
-		var air_offset := Vector3(default_offset.x, default_offset.y + default_size.y * 0.25, default_offset.z)
+		var air_size := Vector3(default_size.x, default_size.y * AIR_HURTBOX_HEIGHT_MULT, default_size.z)
+		var air_offset := Vector3(default_offset.x, default_offset.y - default_size.y * (1.0 - AIR_HURTBOX_HEIGHT_MULT) * 0.5, default_offset.z)
 		hurtbox.resize_hurtbox(air_size, air_offset)
 		return
 
@@ -582,10 +584,12 @@ func _update_hurtbox_shape(input: Dictionary) -> void:
 		hurtbox.resize_hurtbox(crouch_size, crouch_offset)
 		return
 
-	# Tirado en el suelo, hitbox baja y chica
+	# Tirado en el suelo: como agachado pero un poco más baja,
+	# y casi el triple de larga sobre el eje de pelea (Z local,
+	# que es el eje que apunta al rival y por donde queda tendido).
 	if is_knocked_down and current_move == MoveState.GROUND:
-		var kd_size := Vector3(default_size.x * 0.9, default_size.y * 0.3, default_size.z * 0.9)
-		var kd_offset := Vector3(default_offset.x, default_offset.y - default_size.y * 0.35, default_offset.z)
+		var kd_size := Vector3(default_size.x, default_size.y * KD_HURTBOX_HEIGHT_MULT, default_size.z * KD_HURTBOX_LENGTH_MULT)
+		var kd_offset := Vector3(default_offset.x, default_offset.y - default_size.y * (1.0 - KD_HURTBOX_HEIGHT_MULT) * 0.5, default_offset.z)
 		hurtbox.resize_hurtbox(kd_size, kd_offset)
 		return
 

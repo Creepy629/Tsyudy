@@ -11,6 +11,8 @@
 [ext_resource type="Texture2D" uid="uid://c07q635eb4t22" path="res://Texturas/Pelea/suelo.jpg" id="3_suelo"]
 [ext_resource type="Script" uid="uid://b5dau06ljv3y2" path="res://Código/Pelea/SpriteAnimator.gd" id="7_jsk3o"]
 [ext_resource type="Script" uid="uid://bu3wnn13oo8xp" path="res://Código/Pelea/MatchManager.gd" id="11_tereu"]
+[ext_resource type="Script" uid="uid://df4clbkp1h1sr" path="res://Código/Ciudad/Label.gd" id="12_j4aji"]
+[ext_resource type="FontFile" uid="uid://bcr3sja4agp22" path="res://Fuentes/TimesNewerRoman-Bold.otf" id="13_gfqbl"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_suelo"]
 albedo_texture = ExtResource("3_suelo")
@@ -46,6 +48,12 @@ ambient_light_color = Color(0.6, 0.6, 0.6, 1)
 ambient_light_energy = 0.7
 tonemap_mode = 2
 glow_enabled = true
+
+[sub_resource type="LabelSettings" id="LabelSettings_6itf2"]
+font = ExtResource("13_gfqbl")
+font_size = 18
+font_color = Color(0.06053035, 0.06053035, 0.060530342, 1)
+outline_size = 3
 
 [node name="Node3D" type="Node3D" unique_id=1350905932]
 
@@ -91,8 +99,6 @@ shape = SubResource("BoxShape3D_hurtbox")
 [node name="Hitbox" type="Area3D" parent="Player1" unique_id=1949332830]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1)
 script = ExtResource("1_hitbox")
-damage = 0
-knockback = 0.0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Player1/Hitbox" unique_id=1139001889]
 shape = SubResource("BoxShape3D_hitbox")
@@ -124,9 +130,6 @@ shape = SubResource("BoxShape3D_hurtbox")
 [node name="Hitbox" type="Area3D" parent="AI" unique_id=909501306]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1)
 script = ExtResource("1_hitbox")
-damage = 0
-knockback = 0.0
-show_debug_visuals = false
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="AI/Hitbox" unique_id=804497462]
 shape = SubResource("BoxShape3D_hitbox")
@@ -164,3 +167,30 @@ player1_path = NodePath("../Player1")
 player2_path = NodePath("../AI")
 rounds_to_win = 3
 return_to_city = true
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="." unique_id=1434149154]
+offset_right = 639.0
+offset_bottom = 481.0
+script = ExtResource("12_j4aji")
+
+[node name="SubViewport" type="SubViewport" parent="SubViewportContainer" unique_id=1733176045]
+transparent_bg = true
+handle_input_locally = false
+size = Vector2i(640, 480)
+render_target_update_mode = 4
+
+[node name="Label" type="Label" parent="SubViewportContainer/SubViewport" unique_id=1155826736]
+offset_left = 16.0
+offset_top = 91.0
+offset_right = 624.0
+offset_bottom = 296.0
+text = "WASD: Movimiento || IJ: Golpes fuertes || KL: Golpes débiles || O: Guardia
+U: Sidestep (W+DoubleTap: Atrás || S:+DoubleTap Adelante)"
+label_settings = SubResource("LabelSettings_6itf2")
+horizontal_alignment = 1
+
+[node name="Timer" type="Timer" parent="SubViewportContainer/SubViewport" unique_id=547797225]
+wait_time = 10.0
+autostart = true
+
+[connection signal="timeout" from="SubViewportContainer/SubViewport/Timer" to="SubViewportContainer" method="_on_timer_timeout"]

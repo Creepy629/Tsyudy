@@ -1,9 +1,9 @@
 extends Sprite3D
 class_name SpriteAnimator
 
-# ─── Métricas: píxeles → metros ──────────────────────────────────────────
-@export var pixels_per_meter: float = 170.0 # Densidad por personaje/saga
-@export var feet_margin: float = 0.0 # Micro-ajuste vertical
+# ── Métricas ─────────────────────────────────────────────────────────────
+@export var pixels_per_meter: float = 170.0
+@export var feet_margin: float = 0.0
 @export var fps: float = 12.0
 
 var animations: Dictionary = {}
@@ -17,6 +17,7 @@ var _frame_timer: float = 0.0
 var fighter: FighterBody
 var _half_body_local: float = 1.0
 var forced_anim: String = ""
+var _resolved_cache: Dictionary = {}
 
 func _ready() -> void:
 	billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
@@ -32,7 +33,6 @@ func _ready() -> void:
 	if fighter and fighter.character_name != "":
 		_init_character_properties()
 	
-	# Solo arrancar si las animaciones existen
 	if not animations.is_empty():
 		play_sequence("idle", true)
 
@@ -80,15 +80,40 @@ func _load_current_frame() -> void:
 	if _current_sequence.is_empty() or _frame_index >= _current_sequence.size():
 		return
 	var sprite_name = _current_sequence[_frame_index]
-	var path: String = _path + sprite_name + ".png"
-	if not FileAccess.file_exists(path) and not ResourceLoader.exists(path):
-		push_error("El sprite \"" + sprite_name + "\" del personaje " + fighter.character_name + " no existe. Borrar referencia o complementar?")
-		return
-	var tex = load(path)
-	if tex:
+	var tex: Texture2D = _load_with_convention(sprite_name)
+	if tex != null:
 		self.texture = tex
 
-# ─── Métricas: centrado horizontal + pegado a la base ────────────────────
+# ── Resolución de Convenciones ───────────────────────────────────────────
+func _load_with_convention(sprite_name: String) -> Texture2D:
+	if _resolved_cache.has(sprite_name):
+		var cached_path: String = _resolved_cache[sprite_name]
+		if cached_path == "":
+			return null
+		return load(cached_path) as Texture2D
+
+	var candidates: Array[String] = [sprite_name]
+	var stripped: String = sprite_name.replace("_", "")
+	if stripped != sprite_name:
+		candidates.append(stripped)
+	else:
+		var i: int = 0
+		while i < sprite_name.length() and not sprite_name[i].is_valid_int():
+			i += 1
+		if i > 0 and i < sprite_name.length():
+			candidates.append(sprite_name.substr(0, i) + "_" + sprite_name.substr(i))
+
+	for cand in candidates:
+		var path: String = _path + cand + ".png"
+		if FileAccess.file_exists(path) or ResourceLoader.exists(path):
+			_resolved_cache[sprite_name] = path
+			return load(path) as Texture2D
+
+	_resolved_cache[sprite_name] = ""
+	push_error("El sprite \"" + sprite_name + "\" de " + fighter.character_name + " no existe bajo ninguna convención.")
+	return null
+
+# ── Métricas de Posicionamiento ──────────────────────────────────────────
 func _apply_sprite_metrics() -> void:
 	if fighter == null or texture == null:
 		return
@@ -99,11 +124,9 @@ func _apply_sprite_metrics() -> void:
 	pixel_size = px_local
 	scale = Vector3.ONE
 
-	# Y: borde inferior del sprite tocando la base del cuerpo
 	var half_h_local: float = (float(texture.get_height()) / pixels_per_meter) / (2.0 * parent_scale)
 	position.y = - _half_body_local + feet_margin + half_h_local
 
-	# X y Z: siempre centrado. Sin correcciones horizontales.
 	position.x = 0.0
 	position.z = 0.0
 
@@ -128,7 +151,10 @@ func _update_state_machine() -> void:
 				sm.MoveState.GROUND:
 					var fight_axis = fighter.get_fight_axis()
 					var local_vel = fighter.velocity.dot(fight_axis) * fighter.facing_sign
-					if fighter.last_input_state.get("crouch", false):
+					if fighter.is_guarding:
+						target_anim = "guard_crouch" if fighter.is_crouch_guarding else "guard_stand"
+						should_loop = false
+					elif fighter.last_input_state.get("crouch", false):
 						target_anim = "crouch"
 						should_loop = false
 					elif abs(local_vel) > 0.1:

@@ -142,12 +142,12 @@ func _process(delta: float) -> void:
 
 func _build_ui() -> void:
 	var bg := ColorRect.new()
-	bg.color = Color(0.02, 0.02, 0.03)
+	bg.color = Color("#241A33")
 	bg.set_anchors_preset(PRESET_FULL_RECT)
 	add_child(bg)
 
 	var slash_l := ColorRect.new()
-	slash_l.color = Color(0.8, 0.1, 0.1, 0.16)
+	slash_l.color = Color(0.890, 0.004, 0.012, 0.18)
 	slash_l.anchor_top = 0.5
 	slash_l.anchor_bottom = 0.5
 	slash_l.offset_left = -120.0
@@ -159,7 +159,7 @@ func _build_ui() -> void:
 	add_child(slash_l)
 
 	var slash_r := ColorRect.new()
-	slash_r.color = Color(0.1, 0.6, 0.9, 0.16)
+	slash_r.color = Color(0.365, 0.286, 1.0, 0.18)
 	slash_r.anchor_left = 1.0
 	slash_r.anchor_right = 1.0
 	slash_r.anchor_top = 0.5
@@ -210,10 +210,28 @@ func _build_ui() -> void:
 	_vs_label.pivot_offset = Vector2(80.0, 50.0)
 	_vs_label.add_theme_font_override("font", _font_title)
 	_vs_label.add_theme_font_size_override("font_size", 60)
-	_vs_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.0))
+	_vs_label.add_theme_color_override("font_color", Color("#FED347"))
 	_vs_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	_vs_label.add_theme_constant_override("outline_size", 4)
 	add_child(_vs_label)
+
+	var tag := Label.new()
+	tag.text = "M.U.K.K.E.N. // TSYUDY"
+	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tag.anchor_left = 0.5
+	tag.anchor_right = 0.5
+	tag.anchor_top = 0.5
+	tag.anchor_bottom = 0.5
+	tag.offset_left = -200
+	tag.offset_top = -110
+	tag.offset_right = 200
+	tag.offset_bottom = -80
+	tag.add_theme_font_override("font", _font_ui)
+	tag.add_theme_font_size_override("font_size", 12)
+	tag.add_theme_color_override("font_color", Color(0.604, 0.549, 1.0))
+	tag.add_theme_color_override("font_outline_color", Color.BLACK)
+	tag.add_theme_constant_override("outline_size", 2)
+	add_child(tag)
 
 	var pulse := create_tween()
 	pulse.set_loops()
@@ -254,7 +272,7 @@ func _build_ui() -> void:
 	add_child(nr)
 
 	var bar_frame := ColorRect.new()
-	bar_frame.color = Color(0.3, 0.22, 0.12)
+	bar_frame.color = Color(0.227, 0.165, 0.302)
 	bar_frame.anchor_left = 0.5
 	bar_frame.anchor_right = 0.5
 	bar_frame.anchor_top = 1.0
@@ -266,7 +284,7 @@ func _build_ui() -> void:
 	add_child(bar_frame)
 
 	var bar_bg := ColorRect.new()
-	bar_bg.color = Color(0.12, 0.09, 0.05)
+	bar_bg.color = Color(0.10, 0.07, 0.16)
 	bar_bg.anchor_left = 0.5
 	bar_bg.anchor_right = 0.5
 	bar_bg.anchor_top = 1.0
@@ -278,7 +296,7 @@ func _build_ui() -> void:
 	add_child(bar_bg)
 
 	_bar_fill = ColorRect.new()
-	_bar_fill.color = Color(0.85, 0.6, 0.1)
+	_bar_fill.color = Color("#FED347")
 	_bar_fill.anchor_left = 0.5
 	_bar_fill.anchor_right = 0.5
 	_bar_fill.anchor_top = 1.0
@@ -300,7 +318,7 @@ func _build_ui() -> void:
 	_pct_label.offset_bottom = -20
 	_pct_label.add_theme_font_override("font", _font_ui)
 	_pct_label.add_theme_font_size_override("font_size", 16)
-	_pct_label.add_theme_color_override("font_color", Color(0.85, 0.6, 0.1))
+	_pct_label.add_theme_color_override("font_color", Color("#FED347"))
 	add_child(_pct_label)
 
 	_status_label = Label.new()
@@ -315,7 +333,7 @@ func _build_ui() -> void:
 	_status_label.offset_bottom = -48
 	_status_label.add_theme_font_override("font", _font_ui)
 	_status_label.add_theme_font_size_override("font_size", 12)
-	_status_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.75))
+	_status_label.add_theme_color_override("font_color", Color(0.914, 0.890, 0.949))
 	add_child(_status_label)
 
 	_fade = ColorRect.new()

@@ -5,11 +5,11 @@ func _ready() -> void:
 		if player != null:
 			player.global_position = CityReturnRef.position
 		elif player == null:
-			check_player_position()
+			checkPlayerPosition()
 		CityReturnRef.active = false
 
 
-func check_player_position() -> void:
+func checkPlayerPosition() -> void:
 	if get_node_or_null("Jugador"):
 		return
 	if get_node_or_null("Jugador").global_position == Vector2i(0, 0):

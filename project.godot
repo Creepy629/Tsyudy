@@ -18,7 +18,7 @@ config/name="Tsyudy"
 config/name_localized={
 "en": "Tsyudy"
 }
-config/version="0.3.0"
+config/version="0.3.2"
 run/main_scene="uid://dd42glf16hysr"
 config/features=PackedStringArray("4.6")
 boot_splash/bg_color=Color(0.143137, 0.130872, 0.185239, 1)

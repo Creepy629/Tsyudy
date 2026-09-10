@@ -1,15 +1,16 @@
 extends Sprite3D
+
 @onready var lit: MeshInstance3D = get_node("/root/Node3D/LaLuh")
 @onready var look: MeshInstance3D = get_node("/root/Node3D/Jugador/CollisionShape3D/MeshInstance3D")
-var anim_frame := 0
-var frame_timer := 0.0
+var animFrame := 0
+var frameTimer := 0.0
 @export var anim_speed := 15.0
 
 # Se supone que ya no se ocupa este script en su totalidad, pero
 # me da culo quitarlo
 
 func get_direction_index(angle: float) -> int:
-	var ang = fmod(angle + TAU, TAU) 
+	var ang = fmod(angle + TAU, TAU)
 
 	if ang < (PI * 0.125) and ang > (PI * -0.125):
 		return 0
@@ -29,34 +30,34 @@ func get_direction_index(angle: float) -> int:
 		return 84
 	else:
 		return 0
-	
+
 func _process(delta: float) -> void:
-	var to_lit = lit.global_position - global_position
-	to_lit.y = 0
-	look_at(global_position + to_lit.normalized(), Vector3.UP)
+	var toLit = lit.global_position - global_position
+	toLit.y = 0
+	look_at(global_position + toLit.normalized(), Vector3.UP)
 
-	var to_look = look.global_position - global_position
-	to_look.y = 0
+	var toLook = look.global_position - global_position
+	toLook.y = 0
 
-	var angle = atan2(to_look.x, to_look.z) + atan2(-to_lit.x, to_lit.z)
-	var dir_index = get_direction_index(angle)
+	var angle = atan2(toLook.x, toLook.z) + atan2(-toLit.x, toLit.z)
+	var dirIndex = get_direction_index(angle)
 
-	var is_moving := check_if_moving()
+	var isMoving := checkIfMoving()
 
 	if Input.is_action_pressed("Correr"):
 		anim_speed = 30.0
 	else:
 		anim_speed = 15.0
-	if is_moving:
-		frame_timer += delta * anim_speed
-		anim_frame = int(frame_timer) % 12
+	if isMoving:
+		frameTimer += delta * anim_speed
+		animFrame = int(frameTimer) % 12
 	else:
-		anim_frame = 0
-		frame_timer = 0.0
+		animFrame = 0
+		frameTimer = 0.0
 
-	frame = dir_index + anim_frame
+	frame = dirIndex + animFrame
 
-func check_if_moving() -> bool:
+func checkIfMoving() -> bool:
 	var parent := get_parent()
 	if parent is CharacterBody3D:
 		return parent.velocity.length() > 0.05

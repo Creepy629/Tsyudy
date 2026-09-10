@@ -119,14 +119,14 @@ func _spawn_lights() -> void:
 	add_child(sun)
 
 	var l_p1 := OmniLight3D.new()
-	l_p1.light_color = Color(1.0, 0.25, 0.2)
+	l_p1.light_color = Color(0.890, 0.004, 0.012)
 	l_p1.light_energy = 2.0
 	l_p1.omni_range = 10.0
 	l_p1.position = Vector3(-3.0, 2.2, -1.2)
 	add_child(l_p1)
 
 	var l_p2 := OmniLight3D.new()
-	l_p2.light_color = Color(0.2, 0.7, 1.0)
+	l_p2.light_color = Color(0.365, 0.286, 1.0)
 	l_p2.light_energy = 2.0
 	l_p2.omni_range = 10.0
 	l_p2.position = Vector3(3.0, 2.2, -1.2)
@@ -151,7 +151,7 @@ func _spawn_geometry() -> void:
 	var mt1 := StandardMaterial3D.new()
 	mt1.albedo_color = Color(0.2, 0.0, 0.0)
 	mt1.emission_enabled = true
-	mt1.emission = Color(1.0, 0.15, 0.1)
+	mt1.emission = Color(0.890, 0.004, 0.012)
 	mt1.emission_energy = 2.5
 	trim_p1.material = mt1
 	add_child(trim_p1)
@@ -162,7 +162,7 @@ func _spawn_geometry() -> void:
 	var mt2 := StandardMaterial3D.new()
 	mt2.albedo_color = Color(0.0, 0.1, 0.15)
 	mt2.emission_enabled = true
-	mt2.emission = Color(0.1, 0.6, 1.0)
+	mt2.emission = Color(0.365, 0.286, 1.0)
 	mt2.emission_energy = 2.5
 	trim_p2.material = mt2
 	add_child(trim_p2)
@@ -181,7 +181,7 @@ func _spawn_geometry() -> void:
 		logo.text = "MORTAL TEKKEN TECHNIC"
 		logo.rotation.y = PI
 		logo.position = Vector3(0.0, -1.0, 2.2)
-		logo.modulate = Color(0.85, 0.12, 0.1)
+		logo.modulate = Color(0.890, 0.004, 0.012)
 		if ResourceLoader.exists("res://Fuentes/DirtyBrush.ttf"):
 			var fr: Resource = load("res://Fuentes/DirtyBrush.ttf")
 			if fr is Font:
@@ -274,7 +274,7 @@ func _setup_ui() -> void:
 	title.offset_bottom = 38
 	title.add_theme_font_override("font", font_title)
 	title.add_theme_font_size_override("font_size", 24)
-	title.add_theme_color_override("font_color", Color(1.0, 0.8, 0.2))
+	title.add_theme_color_override("font_color", Color("#FED347"))
 	title.add_theme_color_override("font_outline_color", Color.BLACK)
 	title.add_theme_constant_override("outline_size", 3)
 	cl.add_child(title)
@@ -301,7 +301,7 @@ func _setup_ui() -> void:
 	hint.offset_bottom = -6
 	hint.add_theme_font_override("font", font_ui)
 	hint.add_theme_font_size_override("font_size", 14)
-	hint.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))
+	hint.add_theme_color_override("font_color", Color(0.914, 0.890, 0.949))
 	cl.add_child(hint)
 
 func _setup_camera() -> void:
@@ -331,7 +331,7 @@ func _update_highlights() -> void:
 		if i == _p1_locked_index:
 			portraits[i].modulate = Color(1.0, 0.45, 0.45)
 		elif i == cursor_index:
-			portraits[i].modulate = Color.YELLOW if selecting_player == 1 else Color.CYAN
+			portraits[i].modulate = Color("#FED347") if selecting_player == 1 else Color("#9A8CFF")
 		else:
 			portraits[i].modulate = Color.WHITE
 
